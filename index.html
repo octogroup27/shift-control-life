@@ -1,0 +1,2959 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shift - Control Life</title>
+  <meta name="description" content="Shift - Control Life: Gestão pessoal inteligente com agenda estilo Google Calendar, tarefas diárias, rastreador de hábitos semanal e metas Kanban." />
+  <meta property="og:title" content="Shift - Control Life" />
+  <meta property="og:description" content="Shift - Control Life: Gestão pessoal inteligente com agenda estilo Google Calendar, tarefas diárias, rastreador de hábitos semanal e metas Kanban." />
+
+  <!-- Tipografia Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Paleta Pastel aplicada nas classes do Tailwind -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #FAF9F6;
+      color: #1E293B;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Checkbox estilizado */
+    .custom-checkbox {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 1.8px solid #CBD5E1;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-grid;
+      place-content: center;
+      transition: all 0.2s ease;
+      background-color: #FFFFFF;
+    }
+    .custom-checkbox:hover { border-color: #94A3B8; }
+    .custom-checkbox:checked {
+      background-color: #10B981;
+      border-color: #10B981;
+    }
+    .custom-checkbox:checked::before {
+      content: "";
+      width: 0.65rem;
+      height: 0.65rem;
+      clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+      background-color: white;
+    }
+
+    /* Grade e evento da agenda (Google Calendar style) */
+    .calendar-event {
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.15s ease, opacity 0.15s ease;
+      box-sizing: border-box;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+    .calendar-event:active {
+      cursor: grabbing;
+      opacity: 0.85;
+      z-index: 40 !important;
+    }
+    .event-title-clamp {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      line-height: 1.25;
+    }
+    .day-drag-over {
+      background-color: rgba(238, 242, 255, 0.5) !important;
+    }
+    .event-resize-handle {
+      touch-action: none;
+    }
+
+    /* Kanban estilo Trello */
+    .kanban-card {
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+    }
+    .kanban-card:active {
+      cursor: grabbing;
+    }
+    .kanban-card.is-dragging {
+      opacity: 0.35;
+      transform: scale(0.98);
+      border-style: dashed !important;
+      border-color: #38BDF8 !important;
+    }
+    .kanban-column.kanban-drag-over {
+      background-color: #F0F9FF !important;
+      border-color: #0284C7 !important;
+      border-style: dashed !important;
+      box-shadow: 0 4px 16px -2px rgba(2, 132, 199, 0.15);
+    }
+    .kanban-card-drag-over {
+      border-top: 2px solid #0284C7 !important;
+    }
+
+    /* Scrollbar sutil */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-purple-100 selection:text-purple-900">
+
+  <div class="min-h-screen flex flex-col md:flex-row bg-[#FAF9F6] text-slate-800 antialiased">
+
+    <!-- ========================================== -->
+    <!-- BACKDROP MOBILE PARA A SIDEBAR -->
+    <!-- ========================================== -->
+    <div 
+      id="sidebar-backdrop" 
+      onclick="closeSidebar()" 
+      class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 hidden md:hidden transition-opacity duration-300"
+    ></div>
+
+    <!-- ========================================== -->
+    <!-- MENU LATERAL (SIDEBAR RECOLHÍVEL NO MOBILE) -->
+    <!-- ========================================== -->
+    <aside 
+      id="app-sidebar" 
+      class="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:sticky md:top-0 md:h-screen md:w-64 lg:w-72 shrink-0 shadow-2xl md:shadow-none"
+    >
+      <div class="flex flex-col flex-1 min-h-0">
+        <!-- Logo & Marca: Shift - Control Life -->
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-purple-950 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0 border border-slate-700/40">
+              <i data-lucide="zap" class="w-5 h-5 text-sky-400"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="font-extrabold text-slate-900 text-lg tracking-tight leading-tight">Shift</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200/80">Pro</span>
+              </div>
+              <p class="text-[11px] font-bold text-slate-400 tracking-wider uppercase truncate">Control Life</p>
+            </div>
+          </div>
+          <!-- Botão Fechar no Mobile -->
+          <button 
+            type="button" 
+            onclick="closeSidebar()" 
+            class="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer" 
+            aria-label="Fechar Menu Lateral"
+          >
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Usuário & Saudação Rápida -->
+        <div class="px-4 py-3 mx-4 my-3 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 border border-purple-200 flex items-center justify-center font-bold text-xs shrink-0">
+              <span id="sidebar-user-avatar">B</span>
+            </div>
+            <div class="min-w-0">
+              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Conta</p>
+              <h4 
+                id="sidebar-user-name" 
+                onclick="promptEditUserName()" 
+                class="text-xs font-bold text-slate-800 truncate hover:text-purple-700 cursor-pointer flex items-center gap-1" 
+                title="Clique para editar seu nome"
+              >
+                <span id="sidebar-user-name-text">Bookflow</span>
+                <i data-lucide="pencil" class="w-3 h-3 text-slate-400 shrink-0"></i>
+              </h4>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onclick="promptEditUserName()" 
+            class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer" 
+            title="Editar nome"
+          >
+            <i data-lucide="user-cog" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Links de Navegação do Menu Lateral -->
+        <nav class="px-3 py-2 space-y-1 flex-1 overflow-y-auto" aria-label="Menu Lateral">
+          <div class="px-3 pt-1 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Visão Geral
+          </div>
+
+          <button 
+            type="button" 
+            onclick="switchScreen('home')" 
+            id="nav-btn-home" 
+            class="nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 text-white shadow-xs transition-all cursor-pointer text-left"
+          >
+            <div class="flex items-center gap-3">
+              <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0 text-sky-400"></i>
+              <span class="truncate">Início</span>
+            </div>
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>
+          </button>
+
+          <div class="px-3 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Planejamento
+          </div>
+
+          <button 
+            type="button" 
+            onclick="switchScreen('calendar')" 
+            id="nav-btn-calendar" 
+            class="nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer text-left"
+          >
+            <div class="flex items-center gap-3">
+              <i data-lucide="calendar" class="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-600"></i>
+              <span class="truncate">Agenda</span>
+            </div>
+            <span id="nav-calendar-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">0</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="switchScreen('tasks')" 
+            id="nav-btn-tasks" 
+            class="nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer text-left"
+          >
+            <div class="flex items-center gap-3">
+              <i data-lucide="check-square" class="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-600"></i>
+              <span class="truncate">Tarefas</span>
+            </div>
+            <span id="nav-tasks-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">0</span>
+          </button>
+
+          <div class="px-3 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Foco & Metas
+          </div>
+
+          <button 
+            type="button" 
+            onclick="switchScreen('habits')" 
+            id="nav-btn-habits" 
+            class="nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer text-left"
+          >
+            <div class="flex items-center gap-3">
+              <i data-lucide="activity" class="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-600"></i>
+              <span class="truncate">Hábitos</span>
+            </div>
+            <span id="nav-habits-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">0</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="switchScreen('goals')" 
+            id="nav-btn-goals" 
+            class="nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer text-left"
+          >
+            <div class="flex items-center gap-3">
+              <i data-lucide="target" class="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-600"></i>
+              <span class="truncate">Metas</span>
+            </div>
+            <span id="nav-goals-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">0</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Rodapé do Menu Lateral -->
+      <div class="p-4 border-t border-slate-100 space-y-3 bg-slate-50/70 shrink-0">
+        <!-- Card Mini Resumo de Produtividade -->
+        <div class="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-2xs">
+          <div class="flex items-center justify-between text-xs font-medium mb-1.5">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Produtividade</span>
+            <span id="sidebar-productivity-score" class="font-bold text-slate-800 text-xs">0%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div id="sidebar-productivity-bar" class="bg-gradient-to-r from-emerald-500 to-teal-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs font-medium px-1">
+          <span class="text-[10px] uppercase font-bold text-slate-400">Hoje</span>
+          <span id="sidebar-today-date" class="text-slate-600 text-right truncate text-[11px] font-semibold"></span>
+        </div>
+
+        <!-- Status de Conexão com o Supabase / Backend -->
+        <div id="backend-status-badge" class="flex items-center justify-between px-2.5 py-1.5 rounded-xl text-[11px] font-medium bg-white border border-slate-200/80 shadow-2xs">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span id="backend-status-dot" class="w-2 h-2 rounded-full bg-slate-300 shrink-0"></span>
+            <span id="backend-status-text" class="text-slate-600 truncate font-semibold">Verificando...</span>
+          </div>
+          <button type="button" onclick="checkBackendHealth()" title="Recarregar conexão" class="text-slate-400 hover:text-slate-700 cursor-pointer p-0.5">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+          </button>
+        </div>
+
+        <button 
+          type="button" 
+          onclick="resetToDemoData()" 
+          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl border border-slate-200/60 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
+        >
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>Restaurar Dados</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ========================================== -->
+    <!-- CONTEÚDO PRINCIPAL COM BARRA DE TOPO -->
+    <!-- ========================================== -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Barra Superior Mobile (com botão para abrir sidebar recolhida) -->
+      <div class="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <button 
+            type="button" 
+            onclick="openSidebar()" 
+            class="p-2 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80 transition-colors cursor-pointer" 
+            aria-label="Abrir Menu Lateral"
+          >
+            <i data-lucide="menu" class="w-5 h-5"></i>
+          </button>
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
+              <i data-lucide="zap" class="w-3.5 h-3.5 text-sky-400"></i>
+            </div>
+            <span class="font-extrabold text-slate-900 text-base tracking-tight">Shift</span>
+            <span class="text-[10px] font-bold text-slate-400 tracking-wide uppercase">Control Life</span>
+          </div>
+        </div>
+
+        <span id="mobile-current-screen-badge" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200/60">
+          Início
+        </span>
+      </div>
+
+      <!-- Barra Superior Desktop (Minimalista com tela ativa e status) -->
+      <header class="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 border-b border-slate-200/70 bg-white/70 backdrop-blur-xs sticky top-0 z-20">
+        <div class="flex items-center gap-3">
+          <h2 id="desktop-header-title" class="text-base font-bold text-slate-900 tracking-tight">Painel Principal</h2>
+          <span class="text-slate-300">|</span>
+          <p id="header-date" class="text-xs text-slate-500 font-medium"></p>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs font-medium">
+          <div class="bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-[#15803D]"></span>
+            <span>Tarefas: <strong id="header-tasks-stat">0/0</strong></span>
+          </div>
+
+          <div class="bg-[#FFEDD5] text-[#C2410C] border border-[#FED7AA] px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-[#C2410C]"></span>
+            <span>Hábitos: <strong id="header-habits-stat">0/0</strong></span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ÁREA DAS TELAS SEPARADAS -->
+      <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================== -->
+    <!-- TELA 1: INÍCIO (BEM-VINDO & VISÃO GERAL) -->
+    <!-- ========================================== -->
+    <div id="screen-home" class="space-y-6">
+
+      <!-- Banner de Boas-Vindas com Nome do Usuário -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-slate-700/50">
+        <div class="space-y-2">
+          <div class="flex items-center gap-2 text-xs font-semibold text-purple-300 bg-purple-500/20 px-3 py-1 rounded-full w-fit border border-purple-400/20">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Painel Principal</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
+            <span>Bem-vindo,</span>
+            <span 
+              id="welcome-user-name" 
+              onclick="promptEditUserName()" 
+              class="text-sky-300 hover:text-sky-200 cursor-pointer flex items-center gap-1.5 transition-colors border-b border-dashed border-sky-400/50 hover:border-sky-300 pb-0.5" 
+              title="Clique para editar seu nome"
+            >
+              <span id="welcome-user-name-text">Bookflow</span>
+              <i data-lucide="pencil" class="w-3.5 h-3.5 opacity-75"></i>
+            </span>
+          </h1>
+          <p id="welcome-date-text" class="text-slate-300 text-sm font-medium"></p>
+        </div>
+
+        <!-- Atalhos Rápidos para as Telas Separadas -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button 
+            onclick="switchScreen('calendar')" 
+            class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-white/15 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <i data-lucide="calendar" class="w-4 h-4 text-sky-300"></i>
+            <span>Abrir Agenda</span>
+          </button>
+          <button 
+            onclick="switchScreen('tasks')" 
+            class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-white/15 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <i data-lucide="check-square" class="w-4 h-4 text-emerald-300"></i>
+            <span>Ver Tarefas</span>
+          </button>
+          <button 
+            onclick="switchScreen('habits')" 
+            class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-white/15 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <i data-lucide="activity" class="w-4 h-4 text-amber-300"></i>
+            <span>Hábitos</span>
+          </button>
+          <button 
+            onclick="switchScreen('goals')" 
+            class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-white/15 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <i data-lucide="target" class="w-4 h-4 text-purple-300"></i>
+            <span>Metas</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- VISÃO GERAL DE DESEMPENHO (Sem Subtítulo) -->
+      <section class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs">
+        <div class="flex items-center gap-2.5 pb-4 border-b border-slate-100 mb-6">
+          <div class="p-2 bg-[#FCE7F3] text-[#BE185D] border border-[#FBCFE8] rounded-xl">
+            <i data-lucide="pie-chart" class="w-5 h-5"></i>
+          </div>
+          <h2 class="font-bold text-slate-900 text-base sm:text-lg leading-tight">Visão Geral de Desempenho</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <!-- Gráfico Doughnut -->
+          <div class="md:col-span-5 flex flex-col items-center justify-center">
+            <div class="relative w-48 h-48 sm:w-52 sm:h-52">
+              <canvas id="productivityChart"></canvas>
+              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span id="chart-center-percent" class="text-2xl sm:text-3xl font-bold text-slate-800">0%</span>
+                <span class="text-[11px] text-slate-400 uppercase font-semibold tracking-wider">Eficiência</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Cartões de Métricas (Clicáveis para navegar) -->
+          <div class="md:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            
+            <!-- Tarefas -->
+            <div onclick="switchScreen('tasks')" class="bg-[#DCFCE7]/40 border border-[#BBF7D0] rounded-xl p-4 cursor-pointer hover:border-emerald-300 hover:shadow-2xs transition-all">
+              <span class="text-xs font-semibold text-emerald-800 block mb-1">Tarefas Diárias</span>
+              <div class="flex items-baseline gap-1">
+                <span id="stat-tasks-done" class="text-xl font-bold text-slate-900">0</span>
+                <span id="stat-tasks-total" class="text-xs text-slate-500">/ 0</span>
+              </div>
+              <div class="w-full bg-white rounded-full h-1.5 mt-2 overflow-hidden border border-emerald-200">
+                <div id="stat-tasks-bar" class="bg-emerald-500 h-1.5 rounded-full" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Hábitos -->
+            <div onclick="switchScreen('habits')" class="bg-[#FFEDD5]/40 border border-[#FED7AA] rounded-xl p-4 cursor-pointer hover:border-amber-300 hover:shadow-2xs transition-all">
+              <span class="text-xs font-semibold text-amber-800 block mb-1">Hábitos Semanais</span>
+              <div class="flex items-baseline gap-1">
+                <span id="stat-habits-done" class="text-xl font-bold text-slate-900">0</span>
+                <span id="stat-habits-total" class="text-xs text-slate-500">/ 0</span>
+              </div>
+              <div class="w-full bg-white rounded-full h-1.5 mt-2 overflow-hidden border border-amber-200">
+                <div id="stat-habits-bar" class="bg-amber-500 h-1.5 rounded-full" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Metas -->
+            <div onclick="switchScreen('goals')" class="bg-[#F3E8FF]/40 border border-[#E9D5FF] rounded-xl p-4 cursor-pointer hover:border-purple-300 hover:shadow-2xs transition-all">
+              <span class="text-xs font-semibold text-purple-800 block mb-1">Metas Concluídas</span>
+              <div class="flex items-baseline gap-1">
+                <span id="stat-goals-done" class="text-xl font-bold text-slate-900">0</span>
+                <span id="stat-goals-total" class="text-xs text-slate-500">concluídas</span>
+              </div>
+              <div class="w-full bg-white rounded-full h-1.5 mt-2 overflow-hidden border border-purple-200">
+                <div id="stat-goals-bar" class="bg-purple-500 h-1.5 rounded-full" style="width: 0%"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- Resumo Rápido da Tela Inicial: Próximos Compromissos e Tarefas de Hoje -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Próximos Compromissos da Agenda -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD] rounded-lg">
+                  <i data-lucide="calendar" class="w-4 h-4"></i>
+                </div>
+                <h3 class="font-bold text-slate-900 text-sm">Compromissos Agendados</h3>
+              </div>
+              <button onclick="switchScreen('calendar')" class="text-xs text-sky-600 hover:text-sky-800 font-semibold cursor-pointer">
+                Ver Agenda →
+              </button>
+            </div>
+            <div id="home-upcoming-events" class="space-y-2"></div>
+          </div>
+        </div>
+
+        <!-- Tarefas de Hoje -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] rounded-lg">
+                  <i data-lucide="check-square" class="w-4 h-4"></i>
+                </div>
+                <h3 class="font-bold text-slate-900 text-sm">Tarefas de Hoje</h3>
+              </div>
+              <button onclick="switchScreen('tasks')" class="text-xs text-emerald-600 hover:text-emerald-800 font-semibold cursor-pointer">
+                Ver Tarefas →
+              </button>
+            </div>
+            <div id="home-priority-tasks" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TELA 2: AGENDA SEMANAL (SEPARADA) -->
+    <!-- ========================================== -->
+    <div id="screen-calendar" class="hidden space-y-6">
+      <section class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs">
+        
+        <!-- Topo da Agenda: Título, Navegação e Botão "+ Novo Evento" (SEM SUBTÍTULO) -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-100 mb-5">
+          <div class="flex items-center gap-2.5 shrink-0">
+            <div class="p-2 bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD] rounded-xl shrink-0">
+              <i data-lucide="calendar" class="w-5 h-5"></i>
+            </div>
+            <h2 class="font-bold text-slate-900 text-base sm:text-lg leading-tight whitespace-nowrap">Agenda Semanal</h2>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            <!-- Seletor de Modo de Visualização: Dia, 3 Dias, Semana -->
+            <div class="flex items-center bg-slate-100/90 p-0.5 sm:p-1 rounded-xl border border-slate-200/80 text-xs shrink-0">
+              <button 
+                type="button" 
+                onclick="setCalendarView('day')" 
+                id="btn-cal-view-day" 
+                class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer whitespace-nowrap"
+              >
+                1 Dia
+              </button>
+              <button 
+                type="button" 
+                onclick="setCalendarView('3days')" 
+                id="btn-cal-view-3days" 
+                class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer whitespace-nowrap"
+              >
+                3 Dias
+              </button>
+              <button 
+                type="button" 
+                onclick="setCalendarView('week')" 
+                id="btn-cal-view-week" 
+                class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-semibold bg-white text-slate-900 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+              >
+                Semana
+              </button>
+            </div>
+
+            <!-- Controles de Navegação de Dias -->
+            <div class="flex items-center bg-slate-50 border border-slate-200/80 rounded-xl p-0.5 shrink-0">
+              <button 
+                onclick="navigateCalendar(-1)" 
+                class="p-1 sm:p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-white transition-colors cursor-pointer" 
+                title="Período Anterior"
+              >
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <span id="calendar-view-range-label" class="text-xs font-semibold text-slate-700 px-1.5 sm:px-2 select-none min-w-[76px] sm:min-w-[92px] text-center whitespace-nowrap">
+                Semana Toda
+              </span>
+              <button 
+                onclick="navigateCalendar(1)" 
+                class="p-1 sm:p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-white transition-colors cursor-pointer" 
+                title="Próximo Período"
+              >
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+              <button 
+                onclick="resetCalendarToToday()" 
+                class="text-[11px] font-semibold text-sky-700 hover:text-sky-900 px-1.5 sm:px-2 py-1 rounded-lg hover:bg-sky-50 transition-colors border-l border-slate-200/70 ml-0.5 cursor-pointer whitespace-nowrap"
+              >
+                Hoje
+              </button>
+            </div>
+
+            <!-- Filtro de Categoria da Agenda -->
+            <select 
+              id="calendar-category-filter" 
+              onchange="renderCalendar()"
+              class="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none shrink-0"
+            >
+              <option value="all">Todas as Categorias</option>
+              <option value="Trabalho">Trabalho</option>
+              <option value="Reunião">Reunião</option>
+              <option value="Pessoal">Pessoal</option>
+              <option value="Saúde">Saúde</option>
+              <option value="Foco">Foco</option>
+              <option value="Urgente">Urgente</option>
+            </select>
+
+            <!-- Botão Novo Evento -->
+            <button 
+              onclick="openNewEventModal()" 
+              class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-xs shrink-0 whitespace-nowrap cursor-pointer"
+            >
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Novo Evento</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grade Estilo Google Calendar -->
+        <div class="overflow-x-auto border border-slate-200/80 rounded-xl bg-white shadow-2xs">
+          <div id="calendar-container-wrapper" class="min-w-[820px]">
+            
+            <!-- Cabeçalho dos Dias (Renderizado dinamicamente via JS) -->
+            <div id="calendar-header-row" class="border-b border-slate-200/80 bg-slate-50/70 text-center text-xs font-semibold select-none sticky top-0 z-30">
+            </div>
+
+            <!-- Linha de Eventos Dia Todo -->
+            <div id="calendar-allday-container"></div>
+
+            <!-- Grade Contínua de Horários (Estilo Google Calendar) -->
+            <div id="calendar-grid-body" class="relative">
+              <!-- Gerado via JavaScript -->
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TELA 3: TAREFAS DIÁRIAS (SEPARADA) -->
+    <!-- ========================================== -->
+    <div id="screen-tasks" class="hidden space-y-6">
+      <div class="max-w-4xl mx-auto">
+        <section class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] rounded-lg">
+                  <i data-lucide="check-square" class="w-4 h-4"></i>
+                </div>
+                <h2 class="font-bold text-slate-900 text-base sm:text-lg leading-tight">Tarefas Diárias</h2>
+              </div>
+              <span id="tasks-progress-badge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0]">
+                0 de 0
+              </span>
+            </div>
+
+            <!-- Barra de Progresso Suave -->
+            <div class="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+              <div id="tasks-progress-bar" class="bg-[#10B981] h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <!-- Input Rápido com Categoria Real -->
+            <form onsubmit="handleAddTask(event)" class="flex items-center gap-2 mb-3">
+              <input 
+                id="input-task-text" 
+                type="text" 
+                placeholder="O que você precisa fazer hoje? [Enter]" 
+                class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                required 
+              />
+              <select id="input-task-category" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none">
+                <option value="Geral">Geral</option>
+                <option value="Trabalho">Trabalho</option>
+                <option value="Pessoal">Pessoal</option>
+                <option value="Saúde">Saúde</option>
+                <option value="Estudos">Estudos</option>
+              </select>
+              <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white p-2 rounded-xl text-sm font-medium transition-colors shrink-0 cursor-pointer">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+              </button>
+            </form>
+
+            <!-- Filtros -->
+            <div class="flex items-center gap-1.5 mb-3 text-xs">
+              <button onclick="setTaskFilter('all')" id="filter-btn-all" class="px-2.5 py-1 rounded-lg font-medium bg-slate-900 text-white cursor-pointer">Todas</button>
+              <button onclick="setTaskFilter('pending')" id="filter-btn-pending" class="px-2.5 py-1 rounded-lg font-medium text-slate-500 hover:bg-slate-100 cursor-pointer">Pendentes</button>
+              <button onclick="setTaskFilter('completed')" id="filter-btn-completed" class="px-2.5 py-1 rounded-lg font-medium text-slate-500 hover:bg-slate-100 cursor-pointer">Concluídas</button>
+            </div>
+
+            <!-- Lista de Tarefas -->
+            <ul id="task-list" class="space-y-2 max-h-[420px] overflow-y-auto pr-1"></ul>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TELA 4: RASTREADOR DE HÁBITOS (SEPARADA) -->
+    <!-- ========================================== -->
+    <div id="screen-habits" class="hidden space-y-6">
+      <div class="max-w-5xl mx-auto">
+        <section class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-[#FFEDD5] text-[#C2410C] border border-[#FED7AA] rounded-lg">
+                  <i data-lucide="activity" class="w-4 h-4"></i>
+                </div>
+                <h2 class="font-bold text-slate-900 text-base sm:text-lg leading-tight">Rastreador de Hábitos</h2>
+              </div>
+
+              <button 
+                onclick="toggleAddHabitForm()" 
+                class="text-xs font-semibold text-[#C2410C] bg-[#FFEDD5] hover:bg-[#FED7AA] border border-[#FED7AA] px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>Novo Hábito</span>
+              </button>
+            </div>
+
+            <!-- Formulário Hábito -->
+            <div id="habit-form-container" class="hidden mb-4 p-3 bg-amber-50/50 border border-amber-200/60 rounded-xl">
+              <form onsubmit="handleAddHabit(event)" class="flex flex-col sm:flex-row items-center gap-2">
+                <input 
+                  id="input-habit-name" 
+                  type="text" 
+                  placeholder="Nome do hábito (ex: Ler 10 páginas, Beber 2L água)..." 
+                  class="flex-1 w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                  required 
+                />
+                <select id="input-habit-category" class="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+                  <option value="Saúde">Saúde</option>
+                  <option value="Estudos">Estudos</option>
+                  <option value="Rotina">Rotina</option>
+                  <option value="Pessoal">Pessoal</option>
+                </select>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                  <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs px-3 py-1.5 rounded-lg cursor-pointer">Salvar</button>
+                  <button type="button" onclick="toggleAddHabitForm()" class="text-xs text-slate-500 hover:text-slate-700 px-2 cursor-pointer">Cancelar</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Grade Cabeçalho dos Dias -->
+            <div class="grid grid-cols-12 gap-1 text-center text-xs font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-2">
+              <div class="col-span-5 text-left pl-2">Hábito</div>
+              <div class="col-span-1" id="day-col-0">Seg</div>
+              <div class="col-span-1" id="day-col-1">Ter</div>
+              <div class="col-span-1" id="day-col-2">Qua</div>
+              <div class="col-span-1" id="day-col-3">Qui</div>
+              <div class="col-span-1" id="day-col-4">Sex</div>
+              <div class="col-span-1" id="day-col-5">Sáb</div>
+              <div class="col-span-1" id="day-col-6">Dom</div>
+            </div>
+
+            <!-- Lista de Hábitos -->
+            <div id="habit-list" class="space-y-2 max-h-[420px] overflow-y-auto pr-1"></div>
+          </div>
+
+          <!-- Indicador de Consistência Semanal -->
+          <div class="pt-3 border-t border-slate-100 mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+              <span>Alternar conclusão diária</span>
+            </span>
+            <span id="habits-weekly-rate" class="font-semibold text-slate-700">0% de consistência</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TELA 5: METAS KANBAN (SEPARADA) -->
+    <!-- ========================================== -->
+    <div id="screen-goals" class="hidden space-y-6">
+      <section class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 mb-6">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-xl">
+              <i data-lucide="target" class="w-5 h-5"></i>
+            </div>
+            <h2 class="font-bold text-slate-900 text-lg leading-tight">Metas Pessoais & Profissionais</h2>
+          </div>
+
+          <button 
+            onclick="openAddGoalModal()" 
+            class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-xs self-start sm:self-auto cursor-pointer"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Nova Meta</span>
+          </button>
+        </div>
+
+        <!-- 3 Colunas Kanban -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Fazer -->
+          <div 
+            id="kanban-col-todo" 
+            class="kanban-column bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 flex flex-col transition-all duration-200"
+            ondragover="handleGoalColumnDragOver(event)"
+            ondragleave="handleGoalColumnDragLeave(event)"
+            ondrop="handleGoalColumnDrop(event, 'todo')"
+          >
+            <div class="flex items-center justify-between mb-3 select-none">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                <h3 class="font-bold text-slate-700 text-xs uppercase tracking-wider">A Fazer</h3>
+              </div>
+              <span id="count-todo" class="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">0</span>
+            </div>
+            <div id="col-todo" class="space-y-3 flex-1 min-h-[160px] pb-2"></div>
+          </div>
+
+          <!-- Em Andamento -->
+          <div 
+            id="kanban-col-in_progress" 
+            class="kanban-column bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 flex flex-col transition-all duration-200"
+            ondragover="handleGoalColumnDragOver(event)"
+            ondragleave="handleGoalColumnDragLeave(event)"
+            ondrop="handleGoalColumnDrop(event, 'in_progress')"
+          >
+            <div class="flex items-center justify-between mb-3 select-none">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+                <h3 class="font-bold text-sky-800 text-xs uppercase tracking-wider">Em Andamento</h3>
+              </div>
+              <span id="count-in_progress" class="text-xs font-bold text-sky-800 bg-[#E0F2FE] px-2 py-0.5 rounded-md border border-[#BAE6FD]">0</span>
+            </div>
+            <div id="col-in_progress" class="space-y-3 flex-1 min-h-[160px] pb-2"></div>
+          </div>
+
+          <!-- Concluído -->
+          <div 
+            id="kanban-col-done" 
+            class="kanban-column bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 flex flex-col transition-all duration-200"
+            ondragover="handleGoalColumnDragOver(event)"
+            ondragleave="handleGoalColumnDragLeave(event)"
+            ondrop="handleGoalColumnDrop(event, 'done')"
+          >
+            <div class="flex items-center justify-between mb-3 select-none">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <h3 class="font-bold text-emerald-800 text-xs uppercase tracking-wider">Concluído</h3>
+              </div>
+              <span id="count-done" class="text-xs font-bold text-emerald-800 bg-[#DCFCE7] px-2 py-0.5 rounded-md border border-[#BBF7D0]">0</span>
+            </div>
+            <div id="col-done" class="space-y-3 flex-1 min-h-[160px] pb-2"></div>
+          </div>
+
+        </div>
+      </section>
+    </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: NOVO / EDITAR EVENTO NA AGENDA -->
+  <!-- ========================================== -->
+  <div id="modal-event" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <h3 id="modal-event-title" class="font-bold text-slate-900 text-base">Agendar Horário</h3>
+        <button onclick="closeEventModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleSaveEvent(event)" class="space-y-4">
+        <input type="hidden" id="event-id-input" value="" />
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Título do Evento *</label>
+          <input 
+            id="event-title-input" 
+            type="text" 
+            placeholder="Ex: Alinhamento de Projeto, Treino, Consulta..." 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-slate-800"
+            required 
+          />
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <!-- Dia da Semana -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Dia</label>
+            <select id="event-day-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="0">Segunda</option>
+              <option value="1">Terça</option>
+              <option value="2">Quarta</option>
+              <option value="3">Quinta</option>
+              <option value="4">Sexta</option>
+              <option value="5">Sábado</option>
+              <option value="6">Domingo</option>
+            </select>
+          </div>
+
+          <!-- Hora Início -->
+          <div id="event-hour-col">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Hora</label>
+            <select id="event-starthour-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none">
+              <!-- Opções de 07:00 a 21:00 populadas via JS -->
+            </select>
+          </div>
+
+          <!-- Minuto Início -->
+          <div id="event-minute-col">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Minuto</label>
+            <select id="event-startminute-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="0">:00</option>
+              <option value="15">:15</option>
+              <option value="30">:30</option>
+              <option value="45">:45</option>
+            </select>
+          </div>
+
+          <!-- Duração (de 15min ao dia todo) -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Duração</label>
+            <select id="event-duration-input" onchange="handleDurationChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 font-medium focus:outline-none">
+              <option value="0.25">15 min</option>
+              <option value="0.5">30 min</option>
+              <option value="0.75">45 min</option>
+              <option value="1" selected>1 hora</option>
+              <option value="1.5">1h 30min</option>
+              <option value="2">2 horas</option>
+              <option value="3">3 horas</option>
+              <option value="4">4 horas</option>
+              <option value="all_day">Dia todo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Categoria e Seletor Visual de Destaque -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Categoria</label>
+            <select id="event-category-input" onchange="syncEventCategorySelection(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="Trabalho">Trabalho</option>
+              <option value="Reunião">Reunião</option>
+              <option value="Pessoal">Pessoal</option>
+              <option value="Saúde">Saúde</option>
+              <option value="Foco">Foco</option>
+              <option value="Urgente">Urgente</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Destaque Visual</label>
+            <div class="flex items-center gap-1.5 pt-1">
+              <label class="cursor-pointer" title="Rosa">
+                <input type="radio" name="event-color" value="pink" class="peer sr-only">
+                <span class="w-6 h-6 rounded-full bg-[#FCE7F3] border-2 border-[#FBCFE8] peer-checked:ring-2 peer-checked:ring-pink-500 peer-checked:border-pink-600 block"></span>
+              </label>
+              <label class="cursor-pointer" title="Roxo">
+                <input type="radio" name="event-color" value="purple" class="peer sr-only">
+                <span class="w-6 h-6 rounded-full bg-[#F3E8FF] border-2 border-[#E9D5FF] peer-checked:ring-2 peer-checked:ring-purple-500 peer-checked:border-purple-600 block"></span>
+              </label>
+              <label class="cursor-pointer" title="Verde">
+                <input type="radio" name="event-color" value="green" class="peer sr-only">
+                <span class="w-6 h-6 rounded-full bg-[#DCFCE7] border-2 border-[#BBF7D0] peer-checked:ring-2 peer-checked:ring-emerald-500 peer-checked:border-emerald-600 block"></span>
+              </label>
+              <label class="cursor-pointer" title="Azul">
+                <input type="radio" name="event-color" value="blue" class="peer sr-only" checked>
+                <span class="w-6 h-6 rounded-full bg-[#E0F2FE] border-2 border-[#BAE6FD] peer-checked:ring-2 peer-checked:ring-sky-500 peer-checked:border-sky-600 block"></span>
+              </label>
+              <label class="cursor-pointer" title="Laranja">
+                <input type="radio" name="event-color" value="orange" class="peer sr-only">
+                <span class="w-6 h-6 rounded-full bg-[#FFEDD5] border-2 border-[#FED7AA] peer-checked:ring-2 peer-checked:ring-amber-500 peer-checked:border-amber-600 block"></span>
+              </label>
+              <label class="cursor-pointer" title="Vermelho">
+                <input type="radio" name="event-color" value="red" class="peer sr-only">
+                <span class="w-6 h-6 rounded-full bg-[#FEE2E2] border-2 border-[#FECACA] peer-checked:ring-2 peer-checked:ring-rose-500 peer-checked:border-rose-600 block"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+          <button 
+            type="button" 
+            id="btn-delete-event" 
+            onclick="handleDeleteCurrentEvent()" 
+            class="text-rose-600 hover:text-rose-700 text-xs font-semibold hidden"
+          >
+            Excluir Evento
+          </button>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button" onclick="closeEventModal()" class="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100">
+              Cancelar
+            </button>
+            <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-semibold">
+              Salvar
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: NOVA META KANBAN -->
+  <!-- ========================================== -->
+  <div id="modal-goal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <h3 class="font-bold text-slate-900 text-base">Criar Nova Meta</h3>
+        <button onclick="closeAddGoalModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleCreateGoal(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Título da Meta *</label>
+          <input 
+            id="goal-title-input" 
+            type="text" 
+            placeholder="Ex: Lançar Meu Portfólio, Correr 5km..." 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-slate-800" 
+            required 
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Categoria da Meta</label>
+            <select id="goal-category-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="Profissional">Profissional</option>
+              <option value="Pessoal">Pessoal</option>
+              <option value="Saúde">Saúde</option>
+              <option value="Estudos">Estudos</option>
+              <option value="Finanças">Finanças</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Status Inicial</label>
+            <select id="goal-status-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none">
+              <option value="todo">A Fazer</option>
+              <option value="in_progress">Em Andamento</option>
+              <option value="done">Concluído</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">
+            Subtarefas / Etapas (uma por linha)
+            <span class="text-slate-400 font-normal ml-1">- alimentarão o progresso automático</span>
+          </label>
+          <textarea 
+            id="goal-subtasks-input" 
+            rows="3" 
+            placeholder="Definir escopo&#10;Criar protótipo&#10;Publicar versão 1.0" 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeAddGoalModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100">
+            Cancelar
+          </button>
+          <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-semibold">
+            Salvar Meta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT COMPLETO E MODULAR -->
+  <!-- ========================================== -->
+  <script>
+    const STORAGE_KEY = 'gestao_produtividade_v3';
+
+    // Mapeamento visual das 6 cores pastéis
+    const PASTEL_THEMES = {
+      pink: { bg: '#FCE7F3', border: '#FBCFE8', text: '#9D174D', badge: '#BE185D' },
+      purple: { bg: '#F3E8FF', border: '#E9D5FF', text: '#6B21A8', badge: '#7E22CE' },
+      green: { bg: '#DCFCE7', border: '#BBF7D0', text: '#166534', badge: '#15803D' },
+      blue: { bg: '#E0F2FE', border: '#BAE6FD', text: '#075985', badge: '#0284C7' },
+      orange: { bg: '#FFEDD5', border: '#FED7AA', text: '#9A3412', badge: '#C2410C' },
+      red: { bg: '#FEE2E2', border: '#FECACA', text: '#991B1B', badge: '#B91C1C' }
+    };
+
+    // Mapeamento automático de categorias para temas visuais
+    const CATEGORY_THEMES = {
+      'Profissional': PASTEL_THEMES.blue,
+      'Trabalho': PASTEL_THEMES.blue,
+      'Estudos': PASTEL_THEMES.purple,
+      'Reunião': PASTEL_THEMES.purple,
+      'Pessoal': PASTEL_THEMES.pink,
+      'Saúde': PASTEL_THEMES.green,
+      'Finanças': PASTEL_THEMES.orange,
+      'Foco': PASTEL_THEMES.orange,
+      'Rotina': PASTEL_THEMES.orange,
+      'Urgente': PASTEL_THEMES.red,
+      'Geral': PASTEL_THEMES.blue
+    };
+
+    function getThemeForCategory(cat, fallbackColor = 'blue') {
+      if (cat && CATEGORY_THEMES[cat]) return CATEGORY_THEMES[cat];
+      if (fallbackColor && PASTEL_THEMES[fallbackColor]) return PASTEL_THEMES[fallbackColor];
+      return PASTEL_THEMES.blue;
+    }
+
+    const CALENDAR_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+
+    const defaultInitialState = {
+      userName: 'Bookflow',
+      events: [
+        { id: 'ev-1', title: 'Reunião de Alinhamento Semanal', day: 0, startHour: 9, startMinute: 0, duration: 1.5, color: 'blue', category: 'Trabalho' },
+        { id: 'ev-2', title: 'Treino Funcional & Cardio', day: 1, startHour: 7, startMinute: 30, duration: 1, color: 'green', category: 'Saúde' },
+        { id: 'ev-3', title: 'Bloco de Foco: Estudo & Leitura', day: 2, startHour: 14, startMinute: 0, duration: 2, color: 'purple', category: 'Reunião' },
+        { id: 'ev-4', title: 'Planejamento Pessoal & Finanças', day: 3, startHour: 18, startMinute: 0, duration: 1, color: 'pink', category: 'Pessoal' },
+        { id: 'ev-5', title: 'Revisão de Metas & Portfólio', day: 4, startHour: 16, startMinute: 0, duration: 1.5, color: 'orange', category: 'Foco' },
+        { id: 'ev-6', title: 'Almoço em Família', day: 5, startHour: 12, startMinute: 0, duration: 2, color: 'red', category: 'Urgente' }
+      ],
+      tasks: [
+        { id: 't-1', text: 'Revisar cronograma da semana na Agenda', completed: true, category: 'Trabalho' },
+        { id: 't-2', text: 'Ler 20 páginas de design e desenvolvimento', completed: false, category: 'Estudos' },
+        { id: 't-3', text: 'Caminhada de 30 minutos ao ar livre', completed: false, category: 'Saúde' }
+      ],
+      habits: [
+        { id: 'h-1', name: 'Beber 2L de água', category: 'Saúde', days: [true, true, true, false, false, false, false] },
+        { id: 'h-2', name: 'Leitura diária (15 min)', category: 'Estudos', days: [true, true, false, false, false, false, false] },
+        { id: 'h-3', name: 'Exercício ou alongamento', category: 'Saúde', days: [false, true, true, false, false, false, false] },
+        { id: 'h-4', name: 'Meditação matinal', category: 'Rotina', days: [true, false, false, false, false, false, false] }
+      ],
+      goals: [
+        {
+          id: 'g-1',
+          title: 'Lançar Novo Portfólio Pessoal',
+          category: 'Profissional',
+          status: 'in_progress',
+          subtasks: [
+            { id: 'st-1', text: 'Estruturar seções e wireframe', completed: true },
+            { id: 'st-2', text: 'Configurar domínio e deploy rápido', completed: true },
+            { id: 'st-3', text: 'Revisar responsividade mobile', completed: false }
+          ]
+        },
+        {
+          id: 'g-2',
+          title: 'Rotina de Saúde & Corrida 5km',
+          category: 'Saúde',
+          status: 'todo',
+          subtasks: [
+            { id: 'st-4', text: 'Comprar tênis de corrida adequado', completed: false },
+            { id: 'st-5', text: 'Treinar 3x na semana (intervalado)', completed: false },
+            { id: 'st-6', text: 'Completar prova de 5km', completed: false }
+          ]
+        },
+        {
+          id: 'g-3',
+          title: 'Especialização em UI/UX & Produtividade',
+          category: 'Estudos',
+          status: 'done',
+          subtasks: [
+            { id: 'st-7', text: 'Módulos de micro-interações', completed: true },
+            { id: 'st-8', text: 'Projeto prático final', completed: true }
+          ]
+        }
+      ]
+    };
+
+    let currentScreen = 'home';
+    let appState = loadState();
+    let currentTaskFilter = 'all';
+    let draggedEventId = null;
+    let productivityChartInstance = null;
+
+    let syncDebounceTimer = null;
+    let isSyncing = false;
+
+    async function checkBackendHealth() {
+      const dot = document.getElementById('backend-status-dot');
+      const text = document.getElementById('backend-status-text');
+      if (text) text.innerText = 'Verificando...';
+
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const info = await res.json();
+          updateBackendBadge(info);
+          return info;
+        }
+      } catch (err) {
+        console.warn('Backend offline ou inacessível:', err);
+      }
+
+      updateBackendBadge({
+        status: 'offline',
+        database: { connected: false, message: 'Armazenamento Local' }
+      });
+      return null;
+    }
+
+    function updateBackendBadge(info) {
+      const dot = document.getElementById('backend-status-dot');
+      const text = document.getElementById('backend-status-text');
+      if (!dot || !text) return;
+
+      if (info && info.database && info.database.connected) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 shrink-0';
+        text.className = 'text-emerald-700 truncate font-semibold';
+        text.innerText = 'Supabase Conectado';
+      } else if (info && info.status === 'online') {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-500 shrink-0';
+        text.className = 'text-amber-700 truncate font-semibold';
+        text.innerText = 'Backend Local (Ativo)';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-slate-400 shrink-0';
+        text.className = 'text-slate-500 truncate font-semibold';
+        text.innerText = 'Modo Local (Cache)';
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function loadInitialData() {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const remoteState = await res.json();
+          if (remoteState && remoteState.userName) {
+            appState = remoteState;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            renderAll();
+          }
+        }
+      } catch (e) {
+        console.warn('Backend não disponível no momento da carga inicial, usando dados locais:', e);
+      }
+      checkBackendHealth();
+    }
+
+    function syncStateToBackend() {
+      if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+      syncDebounceTimer = setTimeout(async () => {
+        try {
+          isSyncing = true;
+          const res = await fetch('/api/state', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(appState)
+          });
+          if (res.ok) {
+            // Sincronização concluída com sucesso
+          }
+        } catch (e) {
+          console.warn('Erro ao sincronizar com backend:', e);
+        } finally {
+          isSyncing = false;
+        }
+      }, 400); // 400ms debounce
+    }
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (!parsed.userName) parsed.userName = 'Bookflow';
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Erro localStorage:", e);
+      }
+      return JSON.parse(JSON.stringify(defaultInitialState));
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error("Erro ao salvar no localStorage:", e);
+      }
+      renderAll();
+      syncStateToBackend();
+    }
+
+    async function resetToDemoData() {
+      if (confirm("Deseja restaurar os dados de demonstração iniciais?")) {
+        try {
+          const res = await fetch('/api/reset', { method: 'POST' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.state) {
+              appState = data.state;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+              renderAll();
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Falha no reset via API, resetando localmente:', e);
+        }
+        appState = JSON.parse(JSON.stringify(defaultInitialState));
+        saveState();
+      }
+    }
+
+    /* ================================================================= */
+    /* CABEÇALHO & DATA */
+    /* ================================================================= */
+    function updateHeaderInfo() {
+      const now = new Date();
+      const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      const formatted = now.toLocaleDateString('pt-BR', options);
+      const cap = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+
+      const headerDateEl = document.getElementById('header-date');
+      if (headerDateEl) headerDateEl.innerText = cap;
+
+      const sidebarDateEl = document.getElementById('sidebar-today-date');
+      if (sidebarDateEl) {
+        sidebarDateEl.innerText = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      }
+
+      // Atualiza nome e avatar do usuário no sidebar
+      const userName = appState.userName || 'Bookflow';
+      const sidebarUserNameEl = document.getElementById('sidebar-user-name-text');
+      if (sidebarUserNameEl) sidebarUserNameEl.innerText = userName;
+
+      const sidebarAvatarEl = document.getElementById('sidebar-user-avatar');
+      if (sidebarAvatarEl) sidebarAvatarEl.innerText = userName.charAt(0).toUpperCase();
+
+      const jsDay = now.getDay();
+      const habitDayIdx = jsDay === 0 ? 6 : jsDay - 1;
+
+      for (let i = 0; i < 7; i++) {
+        const hCol = document.getElementById(`day-col-${i}`);
+        const cHead = document.getElementById(`cal-head-${i}`);
+        if (i === habitDayIdx) {
+          if (hCol) hCol.className = 'col-span-1 text-emerald-700 font-bold bg-[#DCFCE7] rounded py-0.5';
+          if (cHead) cHead.classList.add('bg-blue-100/60', 'text-blue-900', 'font-bold');
+        } else {
+          if (hCol) hCol.className = 'col-span-1 text-slate-400';
+          if (cHead) cHead.classList.remove('bg-blue-100/60', 'text-blue-900', 'font-bold');
+        }
+      }
+
+      const totTasks = appState.tasks.length;
+      const compTasks = appState.tasks.filter(t => t.completed).length;
+      const pendingTasks = totTasks - compTasks;
+      const headerTasksEl = document.getElementById('header-tasks-stat');
+      if (headerTasksEl) headerTasksEl.innerText = `${compTasks}/${totTasks}`;
+
+      const navTasksBadge = document.getElementById('nav-tasks-badge');
+      if (navTasksBadge) {
+        navTasksBadge.innerText = pendingTasks > 0 ? pendingTasks : '✓';
+        if (currentScreen === 'tasks') {
+          navTasksBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white';
+        } else if (pendingTasks === 0) {
+          navTasksBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+        } else {
+          navTasksBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700';
+        }
+      }
+
+      const totHabits = appState.habits.length;
+      const doneHabits = appState.habits.filter(h => h.days[habitDayIdx]).length;
+      const headerHabitsEl = document.getElementById('header-habits-stat');
+      if (headerHabitsEl) headerHabitsEl.innerText = `${doneHabits}/${totHabits}`;
+
+      const navHabitsBadge = document.getElementById('nav-habits-badge');
+      if (navHabitsBadge) {
+        navHabitsBadge.innerText = `${doneHabits}/${totHabits}`;
+        if (currentScreen === 'habits') {
+          navHabitsBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white';
+        } else {
+          navHabitsBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
+        }
+      }
+
+      // Eventos de hoje na agenda
+      const calEventsToday = appState.events.filter(e => e.day === habitDayIdx).length;
+      const navCalBadge = document.getElementById('nav-calendar-badge');
+      if (navCalBadge) {
+        navCalBadge.innerText = calEventsToday;
+        if (currentScreen === 'calendar') {
+          navCalBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white';
+        } else {
+          navCalBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60';
+        }
+      }
+
+      // Metas ativas (não concluídas)
+      const activeGoals = appState.goals.filter(g => g.status !== 'done').length;
+      const navGoalsBadge = document.getElementById('nav-goals-badge');
+      if (navGoalsBadge) {
+        navGoalsBadge.innerText = activeGoals;
+        if (currentScreen === 'goals') {
+          navGoalsBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white';
+        } else {
+          navGoalsBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800';
+        }
+      }
+
+      // Mini barra de produtividade no rodapé da sidebar
+      const taskPct = totTasks > 0 ? (compTasks / totTasks) : 1;
+      const habitPct = totHabits > 0 ? (doneHabits / totHabits) : 1;
+      const prodScore = Math.round(((taskPct * 0.5) + (habitPct * 0.5)) * 100);
+
+      const prodScoreEl = document.getElementById('sidebar-productivity-score');
+      if (prodScoreEl) prodScoreEl.innerText = `${prodScore}%`;
+
+      const prodBarEl = document.getElementById('sidebar-productivity-bar');
+      if (prodBarEl) prodBarEl.style.width = `${prodScore}%`;
+    }
+
+    /* ================================================================= */
+    /* 1. AGENDA SEMANAL GOOGLE CALENDAR (DRAG & DROP) */
+    /* ================================================================= */
+    function populateHourSelect() {
+      const select = document.getElementById('event-starthour-input');
+      if (!select || select.children.length > 0) return;
+      CALENDAR_HOURS.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = `${String(h).padStart(2, '0')}:00`;
+        select.appendChild(opt);
+      });
+    }
+
+    let calendarViewMode = 'week'; // 'day' | '3days' | 'week'
+    let calendarStartDay = 0; // 0..6 (Segunda a Domingo)
+    const DAY_NAMES_FULL = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
+    const DAY_NAMES_SHORT = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+    function getTodayDayIndex() {
+      const jsDay = new Date().getDay();
+      return jsDay === 0 ? 6 : jsDay - 1;
+    }
+
+    function setCalendarView(mode) {
+      calendarViewMode = mode;
+      const todayIdx = getTodayDayIndex();
+
+      // Atualiza botões de visualização
+      const btnDay = document.getElementById('btn-cal-view-day');
+      const btn3Days = document.getElementById('btn-cal-view-3days');
+      const btnWeek = document.getElementById('btn-cal-view-week');
+
+      const activeClass = 'px-2.5 py-1.5 rounded-lg font-semibold bg-white text-slate-900 shadow-2xs transition-all cursor-pointer';
+      const inactiveClass = 'px-2.5 py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+
+      if (btnDay) btnDay.className = mode === 'day' ? activeClass : inactiveClass;
+      if (btn3Days) btn3Days.className = mode === '3days' ? activeClass : inactiveClass;
+      if (btnWeek) btnWeek.className = mode === 'week' ? activeClass : inactiveClass;
+
+      if (mode === 'day') {
+        calendarStartDay = todayIdx;
+      } else if (mode === '3days') {
+        calendarStartDay = Math.min(todayIdx, 4);
+      } else {
+        calendarStartDay = 0;
+      }
+
+      // Ajusta largura mínima do container
+      const wrapper = document.getElementById('calendar-container-wrapper');
+      if (wrapper) {
+        if (mode === 'day') wrapper.className = 'min-w-[320px] sm:min-w-full';
+        else if (mode === '3days') wrapper.className = 'min-w-[500px] sm:min-w-full';
+        else wrapper.className = 'min-w-[820px]';
+      }
+
+      renderCalendar();
+    }
+
+    function navigateCalendar(direction) {
+      if (calendarViewMode === 'day') {
+        calendarStartDay = (calendarStartDay + direction + 7) % 7;
+      } else if (calendarViewMode === '3days') {
+        calendarStartDay = (calendarStartDay + direction + 7) % 7;
+      } else {
+        // Na semana, pode ciclar ou focar
+        calendarStartDay = (calendarStartDay + (direction * 7) + 7) % 7;
+      }
+      renderCalendar();
+    }
+
+    function resetCalendarToToday() {
+      const todayIdx = getTodayDayIndex();
+      calendarStartDay = todayIdx;
+      if (calendarViewMode === '3days') {
+        calendarStartDay = Math.min(todayIdx, 4);
+      }
+      renderCalendar();
+    }
+
+    function getVisibleDays() {
+      if (calendarViewMode === 'day') {
+        return [calendarStartDay];
+      }
+      if (calendarViewMode === '3days') {
+        return [
+          calendarStartDay,
+          (calendarStartDay + 1) % 7,
+          (calendarStartDay + 2) % 7
+        ];
+      }
+      return [0, 1, 2, 3, 4, 5, 6];
+    }
+
+    function formatDurationLabel(dur) {
+      if (dur === 'all_day') return 'Dia todo';
+      const num = parseFloat(dur);
+      if (num === 0.25) return '15 min';
+      if (num === 0.5) return '30 min';
+      if (num === 0.75) return '45 min';
+      if (num === 1) return '1h';
+      if (num === 1.5) return '1h 30m';
+      if (num === 2) return '2h';
+      if (num === 3) return '3h';
+      if (num === 4) return '4h';
+      return `${num}h`;
+    }
+
+    function handleDurationChange(val) {
+      const isAllDay = val === 'all_day';
+      const hourSelect = document.getElementById('event-starthour-input');
+      const minSelect = document.getElementById('event-startminute-input');
+      const hourCol = document.getElementById('event-hour-col');
+      const minCol = document.getElementById('event-minute-col');
+
+      if (hourSelect) hourSelect.disabled = isAllDay;
+      if (minSelect) minSelect.disabled = isAllDay;
+      if (hourCol) hourCol.style.opacity = isAllDay ? '0.5' : '1';
+      if (minCol) minCol.style.opacity = isAllDay ? '0.5' : '1';
+    }
+
+    // Algoritmo do Google Calendar para agrupamento e posicionamento de eventos concorrentes/sobrepostos
+    function computeEventLayouts(events) {
+      if (!events || events.length === 0) return [];
+
+      const items = events.map(ev => {
+        const hour = typeof ev.startHour === 'number' ? ev.startHour : 7;
+        const minute = typeof ev.startMinute === 'number' ? ev.startMinute : 0;
+        const startMin = (hour - 7) * 60 + minute;
+        const durMin = (parseFloat(ev.duration) || 1) * 60;
+        const endMin = startMin + durMin;
+        return { ev, startMin, endMin, durMin };
+      });
+
+      // Ordena cronologicamente e por duração decrescente
+      items.sort((a, b) => a.startMin - b.startMin || b.durMin - a.durMin);
+
+      // Agrupa eventos em clusters de sobreposição
+      const clusters = [];
+      items.forEach(item => {
+        let placed = false;
+        for (const cluster of clusters) {
+          const overlaps = cluster.some(c => item.startMin < c.endMin && item.endMin > c.startMin);
+          if (overlaps) {
+            cluster.push(item);
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          clusters.push([item]);
+        }
+      });
+
+      const layouts = [];
+
+      // Divide a largura entre eventos simultâneos (side-by-side no padrão Google Calendar)
+      clusters.forEach(cluster => {
+        const columns = [];
+        cluster.forEach(item => {
+          let colIdx = 0;
+          while (true) {
+            if (!columns[colIdx]) {
+              columns[colIdx] = [item];
+              item.colIdx = colIdx;
+              break;
+            }
+            const conflict = columns[colIdx].some(c => item.startMin < c.endMin && item.endMin > c.startMin);
+            if (!conflict) {
+              columns[colIdx].push(item);
+              item.colIdx = colIdx;
+              break;
+            }
+            colIdx++;
+          }
+        });
+
+        const totalCols = columns.length;
+        cluster.forEach(item => {
+          const colWidthPercent = 100 / totalCols;
+          const leftPercent = item.colIdx * colWidthPercent;
+          layouts.push({
+            ev: item.ev,
+            top: Math.max(0, item.startMin),
+            // Duração exata: 60px por hora = 1px por minuto. Deixamos 2px de respiro na borda inferior
+            height: Math.max(22, item.durMin - 2),
+            leftPercent,
+            widthPercent: colWidthPercent,
+            startMin: item.startMin,
+            endMin: item.endMin,
+            durMin: item.durMin
+          });
+        });
+      });
+
+      return layouts;
+    }
+
+    function renderCalendar() {
+      populateHourSelect();
+      const grid = document.getElementById('calendar-grid-body');
+      const allDayContainer = document.getElementById('calendar-allday-container');
+      const headerRow = document.getElementById('calendar-header-row');
+      const rangeLabel = document.getElementById('calendar-view-range-label');
+      const categoryFilter = document.getElementById('calendar-category-filter')?.value || 'all';
+
+      const visibleDays = getVisibleDays();
+      const todayIdx = getTodayDayIndex();
+
+      // Define gridColsClass conforme número de dias visíveis
+      let gridColsClass = 'grid-cols-[70px_repeat(7,1fr)]';
+      if (visibleDays.length === 1) gridColsClass = 'grid-cols-[70px_1fr]';
+      else if (visibleDays.length === 3) gridColsClass = 'grid-cols-[70px_repeat(3,1fr)]';
+
+      // Atualiza texto do intervalo no topo
+      if (rangeLabel) {
+        if (calendarViewMode === 'day') {
+          const isToday = calendarStartDay === todayIdx;
+          rangeLabel.innerText = isToday ? `Hoje (${DAY_NAMES_SHORT[calendarStartDay]})` : DAY_NAMES_FULL[calendarStartDay];
+        } else if (calendarViewMode === '3days') {
+          const first = DAY_NAMES_SHORT[visibleDays[0]];
+          const last = DAY_NAMES_SHORT[visibleDays[visibleDays.length - 1]];
+          rangeLabel.innerText = `${first} a ${last}`;
+        } else {
+          rangeLabel.innerText = 'Semana Toda';
+        }
+      }
+
+      // 1. Cabeçalho dos Dias (com badge estilizado de Hoje no padrão Google Calendar)
+      if (headerRow) {
+        headerRow.className = `grid ${gridColsClass} border-b border-slate-200/80 bg-slate-50/80 text-center text-xs font-semibold select-none sticky top-0 z-30`;
+        let headHtml = `<div class="py-2.5 text-slate-400 border-r border-slate-200/80 select-none flex items-center justify-center text-[11px]">Horário</div>`;
+
+        visibleDays.forEach((day, idx) => {
+          const isToday = day === todayIdx;
+          const isLast = idx === visibleDays.length - 1;
+          const borderClass = isLast ? '' : 'border-r border-slate-200/60';
+          const todayBadge = isToday ? '<span class="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">H</span>' : '';
+          const activeText = isToday ? 'text-blue-900 font-bold' : 'text-slate-700';
+
+          headHtml += `
+            <div id="cal-head-${day}" class="py-2.5 ${borderClass} flex items-center justify-center gap-1.5 transition-colors min-w-0 overflow-hidden px-1">
+              <span class="truncate ${activeText}">${calendarViewMode === 'day' ? DAY_NAMES_FULL[day] : DAY_NAMES_SHORT[day]}</span>
+              ${todayBadge}
+            </div>
+          `;
+        });
+        headerRow.innerHTML = headHtml;
+      }
+
+      // 2. Linha de Eventos de Dia Todo
+      const allDayEvents = appState.events.filter(ev => {
+        if (categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
+        return ev.duration === 'all_day' && visibleDays.includes(ev.day);
+      });
+
+      if (allDayContainer) {
+        if (allDayEvents.length > 0) {
+          let allDayHtml = `
+            <div class="grid ${gridColsClass} min-h-[44px] bg-slate-50/60 border-b border-slate-200/80 items-stretch">
+              <div class="p-2 text-right text-[11px] font-bold text-slate-500 border-r border-slate-200/80 select-none flex items-center justify-end">
+                Dia todo
+              </div>
+          `;
+
+          visibleDays.forEach((day, idx) => {
+            const isLast = idx === visibleDays.length - 1;
+            const borderClass = isLast ? '' : 'border-r border-slate-200/60';
+            const dayAllDayEvents = allDayEvents.filter(ev => ev.day === day);
+
+            allDayHtml += `
+              <div class="p-1 ${borderClass} flex flex-col gap-1 justify-center min-h-[42px] min-w-0 overflow-hidden box-border" onclick="openNewEventModal(${day}, 7, 0, 'all_day')">
+            `;
+
+            dayAllDayEvents.forEach(ev => {
+              const theme = ev.color && PASTEL_THEMES[ev.color] ? PASTEL_THEMES[ev.color] : getThemeForCategory(ev.category, 'blue');
+              allDayHtml += `
+                <div 
+                  id="event-${ev.id}"
+                  draggable="true"
+                  ondragstart="handleEventDragStart(event, '${ev.id}')"
+                  ondragend="handleEventDragEnd(event)"
+                  onclick="handleEventClick(event, '${ev.id}')"
+                  class="calendar-event rounded-lg px-2 py-1 border text-xs font-semibold flex items-center justify-between cursor-pointer shadow-2xs hover:brightness-95 transition-all w-full max-w-full min-w-0 overflow-hidden box-border"
+                  style="background-color: ${theme.bg}; border-color: ${theme.border}; color: ${theme.text};"
+                  title="${escapeHtml(ev.title)} (Dia todo)"
+                >
+                  <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background-color: ${theme.text};"></span>
+                    <span class="truncate min-w-0 text-[11px] font-bold">${escapeHtml(ev.title)}</span>
+                  </div>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ml-1 whitespace-nowrap" style="background-color: ${theme.border}; color: ${theme.text};">
+                    Dia todo
+                  </span>
+                </div>
+              `;
+            });
+
+            allDayHtml += `</div>`;
+          });
+
+          allDayHtml += `</div>`;
+          allDayContainer.innerHTML = allDayHtml;
+        } else {
+          allDayContainer.innerHTML = '';
+        }
+      }
+
+      // 3. Grade Contínua de Horários (07:00 às 22:00) com Duração Proporcional Perfeita
+      if (grid) {
+        const now = new Date();
+        const nowMinutesFromStart = (now.getHours() - 7) * 60 + now.getMinutes();
+        const nowHourStr = String(now.getHours()).padStart(2, '0');
+        const nowMinStr = String(now.getMinutes()).padStart(2, '0');
+
+        let gridHtml = `
+          <div class="grid ${gridColsClass} relative bg-white select-none">
+            <!-- Coluna de Horários da Esquerda (Time Gutter) -->
+            <div class="relative border-r border-slate-200/80 bg-slate-50/30 select-none h-[900px]">
+        `;
+
+        // Marcações das horas
+        CALENDAR_HOURS.forEach((hour) => {
+          const formattedHour = `${String(hour).padStart(2, '0')}:00`;
+          gridHtml += `
+            <div class="h-[60px] relative box-border">
+              <span class="absolute -top-2.5 right-2 text-[11px] font-semibold text-slate-400 select-none">${formattedHour}</span>
+            </div>
+          `;
+        });
+        gridHtml += `
+            <span class="absolute bottom-0.5 right-2 text-[11px] font-semibold text-slate-400 select-none">22:00</span>
+        `;
+
+        // Badge de horário atual no time gutter
+        if (visibleDays.includes(todayIdx) && nowMinutesFromStart >= 0 && nowMinutesFromStart <= 900) {
+          gridHtml += `
+            <div class="absolute right-1 z-30 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-xs -translate-y-1/2" style="top: ${nowMinutesFromStart}px;">
+              ${nowHourStr}:${nowMinStr}
+            </div>
+          `;
+        }
+
+        gridHtml += `</div>`; // fecha coluna da esquerda
+
+        // Colunas para cada dia visível
+        visibleDays.forEach((day, idx) => {
+          const isToday = day === todayIdx;
+          const isLast = idx === visibleDays.length - 1;
+          const borderClass = isLast ? '' : 'border-r border-slate-200/60';
+
+          const dayTimedEvents = appState.events.filter(ev => {
+            if (categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
+            if (ev.duration === 'all_day') return false;
+            return ev.day === day;
+          });
+
+          const layouts = computeEventLayouts(dayTimedEvents);
+
+          gridHtml += `
+            <div 
+              class="day-drop-zone relative h-[900px] ${borderClass} overflow-hidden box-border"
+              data-day="${day}"
+              ondragover="handleDayDragOver(event)"
+              ondragleave="handleDayDragLeave(event)"
+              ondrop="handleDayDrop(event, ${day})"
+            >
+              <!-- Linhas de Fundo da Grade (60px por hora com divisória tracejada de 30min) -->
+              <div class="absolute inset-0 pointer-events-auto">
+                ${CALENDAR_HOURS.map(hour => `
+                  <div class="h-[60px] border-b border-slate-200/70 relative box-border" data-day="${day}" data-hour="${hour}">
+                    <div 
+                      class="h-[30px] border-b border-slate-100/90 border-dashed hover:bg-sky-50/25 transition-colors cursor-pointer"
+                      onclick="handleSlotTimeClick(event, ${day}, ${hour}, 0)"
+                      title="Clique para agendar às ${String(hour).padStart(2, '0')}:00"
+                    ></div>
+                    <div 
+                      class="h-[30px] hover:bg-sky-50/25 transition-colors cursor-pointer"
+                      onclick="handleSlotTimeClick(event, ${day}, ${hour}, 30)"
+                      title="Clique para agendar às ${String(hour).padStart(2, '0')}:30"
+                    ></div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Indicador de Horário Atual em Tempo Real (Linha Vermelha do Google Calendar) -->
+              ${isToday && nowMinutesFromStart >= 0 && nowMinutesFromStart <= 900 ? `
+                <div class="absolute left-0 right-0 z-20 pointer-events-none flex items-center" style="top: ${nowMinutesFromStart}px;">
+                  <div class="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1.5 shadow-xs"></div>
+                  <div class="h-[2px] bg-red-500 flex-1"></div>
+                </div>
+              ` : ''}
+
+              <!-- Eventos Posicionados Exatamente Conforme as Linhas de Horário e Duração -->
+              ${layouts.map(layout => {
+                const ev = layout.ev;
+                const theme = ev.color && PASTEL_THEMES[ev.color] ? PASTEL_THEMES[ev.color] : getThemeForCategory(ev.category, 'blue');
+                const dur = parseFloat(ev.duration) || 1;
+                const durLabel = formatDurationLabel(ev.duration);
+                const startHour = ev.startHour || 7;
+                const startMin = ev.startMinute || 0;
+                const totalEndMinutes = (startHour * 60 + startMin) + Math.round(dur * 60);
+                const endHour = Math.floor(totalEndMinutes / 60);
+                const endMin = totalEndMinutes % 60;
+                const timeStartStr = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`;
+                const timeEndStr = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+                const timeDisplay = `${timeStartStr} – ${timeEndStr}`;
+
+                return `
+                  <div 
+                    id="event-${ev.id}"
+                    draggable="true"
+                    ondragstart="handleEventDragStart(event, '${ev.id}')"
+                    ondragend="handleEventDragEnd(event)"
+                    onclick="handleEventClick(event, '${ev.id}')"
+                    class="calendar-event absolute rounded-lg border text-xs cursor-pointer shadow-xs hover:shadow-md hover:brightness-95 transition-all overflow-hidden box-border group/card flex flex-col justify-between"
+                    style="
+                      top: ${layout.top}px; 
+                      height: ${layout.height}px; 
+                      left: calc(${layout.leftPercent}% + 2px); 
+                      width: calc(${layout.widthPercent}% - 4px); 
+                      background-color: ${theme.bg}; 
+                      border-color: ${theme.border}; 
+                      color: ${theme.text};
+                      z-index: 10;
+                    "
+                    title="${escapeHtml(ev.title)} - ${timeDisplay} (${durLabel}) | Clique para editar, arraste para mover ou redimensione na borda inferior"
+                  >
+                    ${layout.height < 32 ? `
+                      <div class="p-1 px-1.5 flex items-center justify-between gap-1 leading-none text-[11px] font-bold truncate">
+                        <span class="truncate">${escapeHtml(ev.title)}</span>
+                        <span class="text-[9px] opacity-75 shrink-0 font-semibold">${timeStartStr}</span>
+                      </div>
+                    ` : layout.height < 55 ? `
+                      <div class="p-1.5 px-2 flex flex-col justify-between h-full leading-tight">
+                        <div class="flex items-start justify-between gap-1">
+                          <span class="font-bold text-xs truncate">${escapeHtml(ev.title)}</span>
+                          <span class="text-[10px] opacity-75 shrink-0 font-semibold">${timeStartStr}</span>
+                        </div>
+                        <div class="text-[9px] opacity-75 truncate">${timeDisplay}</div>
+                      </div>
+                    ` : `
+                      <div class="p-2 flex flex-col justify-between h-full leading-tight">
+                        <div>
+                          <div class="flex items-start justify-between gap-1 mb-0.5">
+                            <span class="font-bold text-xs event-title-clamp" title="${escapeHtml(ev.title)}">${escapeHtml(ev.title)}</span>
+                            <span class="text-[10px] opacity-75 shrink-0 font-semibold pl-1 whitespace-nowrap">${timeStartStr}</span>
+                          </div>
+                          <div class="text-[10px] opacity-75 font-medium mb-1">${timeDisplay}</div>
+                        </div>
+                        <div class="flex items-center justify-between gap-1 mt-auto pt-1 text-[9px]">
+                          ${ev.category ? `
+                            <span class="font-semibold px-1.5 py-0.5 rounded-md truncate max-w-[68%]" style="background-color: ${theme.border}; color: ${theme.text};">
+                              ${escapeHtml(ev.category)}
+                            </span>
+                          ` : '<span></span>'}
+                          <span class="event-dur-label font-medium opacity-75 shrink-0 ml-auto whitespace-nowrap">${durLabel}</span>
+                        </div>
+                      </div>
+                    `}
+
+                    <!-- Alça de redimensionamento na borda inferior (Google Calendar resize handle) -->
+                    <div 
+                      class="event-resize-handle absolute bottom-0 left-0 right-0 h-2.5 cursor-s-resize flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity z-20"
+                      onmousedown="startEventResize(event, '${ev.id}')"
+                      title="Arraste para ajustar a duração"
+                    >
+                      <div class="w-8 h-1 rounded-full bg-slate-500/40"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        });
+
+        gridHtml += `</div>`;
+        grid.innerHTML = gridHtml;
+      }
+
+      lucide.createIcons();
+    }
+
+    // Drag & Drop contínuo em dias e horários no estilo Google Calendar
+    function handleEventDragStart(e, eventId) {
+      draggedEventId = eventId;
+      e.dataTransfer.setData('text/plain', eventId);
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.classList.add('opacity-40');
+    }
+
+    function handleEventDragEnd(e) {
+      e.target.classList.remove('opacity-40');
+      document.querySelectorAll('.day-drag-over').forEach(el => el.classList.remove('day-drag-over'));
+    }
+
+    function handleDayDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dropZone = e.currentTarget;
+      if (!dropZone.classList.contains('day-drag-over')) {
+        dropZone.classList.add('day-drag-over');
+      }
+    }
+
+    function handleDayDragLeave(e) {
+      e.currentTarget.classList.remove('day-drag-over');
+    }
+
+    function handleDayDrop(e, day) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('day-drag-over');
+
+      const eventId = e.dataTransfer.getData('text/plain') || draggedEventId;
+      if (!eventId) return;
+
+      const ev = appState.events.find(item => item.id === eventId);
+      if (!ev) return;
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeY = Math.max(0, Math.min(885, e.clientY - rect.top));
+
+      // 60px = 60min, cada 15px = 15min
+      const snappedMinutes = Math.floor(relativeY / 15) * 15;
+      const newHour = Math.min(21, 7 + Math.floor(snappedMinutes / 60));
+      const newMinute = snappedMinutes % 60;
+
+      ev.day = day;
+      if (ev.duration !== 'all_day') {
+        ev.startHour = newHour;
+        ev.startMinute = newMinute;
+      }
+      saveState();
+      draggedEventId = null;
+    }
+
+    function handleSlotTimeClick(e, day, hour, minute) {
+      if (e.target.closest('.calendar-event')) return;
+      openNewEventModal(day, hour, minute);
+    }
+
+    // Redimensionamento de duração por arrasto na borda inferior do evento
+    let resizingEventId = null;
+    let resizeStartY = 0;
+    let resizeStartDuration = 1;
+
+    function startEventResize(e, eventId) {
+      e.stopPropagation();
+      e.preventDefault();
+      resizingEventId = eventId;
+      resizeStartY = e.clientY;
+      const ev = appState.events.find(item => item.id === eventId);
+      resizeStartDuration = parseFloat(ev?.duration) || 1;
+
+      document.addEventListener('mousemove', onEventResizeMove);
+      document.addEventListener('mouseup', onEventResizeEnd);
+    }
+
+    function onEventResizeMove(e) {
+      if (!resizingEventId) return;
+      const ev = appState.events.find(item => item.id === resizingEventId);
+      if (!ev) return;
+
+      const deltaY = e.clientY - resizeStartY;
+      const deltaHours = Math.round(deltaY / 15) * 0.25;
+      let newDur = Math.max(0.25, Math.min(6, resizeStartDuration + deltaHours));
+
+      const card = document.getElementById(`event-${ev.id}`);
+      if (card) {
+        const newHeight = Math.max(22, (newDur * 60) - 2);
+        card.style.height = `${newHeight}px`;
+        const durSpan = card.querySelector('.event-dur-label');
+        if (durSpan) durSpan.innerText = formatDurationLabel(newDur);
+      }
+    }
+
+    function onEventResizeEnd(e) {
+      if (!resizingEventId) return;
+      const deltaY = e.clientY - resizeStartY;
+      const deltaHours = Math.round(deltaY / 15) * 0.25;
+      let newDur = Math.max(0.25, Math.min(6, resizeStartDuration + deltaHours));
+
+      const ev = appState.events.find(item => item.id === resizingEventId);
+      if (ev) {
+        ev.duration = newDur;
+        saveState();
+      }
+
+      resizingEventId = null;
+      document.removeEventListener('mousemove', onEventResizeMove);
+      document.removeEventListener('mouseup', onEventResizeEnd);
+    }
+
+    function syncEventCategorySelection(cat) {
+      const colorMap = {
+        'Trabalho': 'blue',
+        'Reunião': 'purple',
+        'Pessoal': 'pink',
+        'Saúde': 'green',
+        'Foco': 'orange',
+        'Urgente': 'red'
+      };
+      const desiredColor = colorMap[cat] || 'blue';
+      const radio = document.querySelector(`input[name="event-color"][value="${desiredColor}"]`);
+      if (radio) radio.checked = true;
+    }
+
+    function openNewEventModal(preselectedDay = null, preselectedHour = null, preselectedMinute = null, preselectedDuration = null) {
+      document.getElementById('modal-event-title').innerText = 'Agendar Novo Horário';
+      document.getElementById('event-id-input').value = '';
+      document.getElementById('event-title-input').value = '';
+      document.getElementById('event-category-input').value = 'Trabalho';
+      syncEventCategorySelection('Trabalho');
+
+      const durVal = preselectedDuration || '1';
+      document.getElementById('event-duration-input').value = durVal;
+      handleDurationChange(durVal);
+
+      document.getElementById('event-startminute-input').value = preselectedMinute !== null ? String(preselectedMinute) : '0';
+      document.getElementById('btn-delete-event').classList.add('hidden');
+
+      if (preselectedDay !== null) {
+        document.getElementById('event-day-input').value = preselectedDay;
+      }
+      if (preselectedHour !== null) {
+        document.getElementById('event-starthour-input').value = preselectedHour;
+      }
+
+      document.getElementById('modal-event').classList.remove('hidden');
+      document.getElementById('modal-event').classList.add('flex');
+      document.getElementById('event-title-input').focus();
+    }
+
+    function handleEventClick(e, eventId) {
+      e.stopPropagation();
+      const ev = appState.events.find(i => i.id === eventId);
+      if (!ev) return;
+
+      document.getElementById('modal-event-title').innerText = 'Editar Horário';
+      document.getElementById('event-id-input').value = ev.id;
+      document.getElementById('event-title-input').value = ev.title;
+      document.getElementById('event-day-input').value = ev.day;
+      document.getElementById('event-starthour-input').value = ev.startHour || 7;
+      document.getElementById('event-startminute-input').value = String(ev.startMinute || 0);
+      document.getElementById('event-duration-input').value = String(ev.duration || 1);
+      handleDurationChange(String(ev.duration || 1));
+      document.getElementById('event-category-input').value = ev.category || 'Trabalho';
+      
+      const radio = document.querySelector(`input[name="event-color"][value="${ev.color || 'blue'}"]`);
+      if (radio) radio.checked = true;
+
+      document.getElementById('btn-delete-event').classList.remove('hidden');
+      document.getElementById('modal-event').classList.remove('hidden');
+      document.getElementById('modal-event').classList.add('flex');
+    }
+
+    function closeEventModal() {
+      document.getElementById('modal-event').classList.add('hidden');
+      document.getElementById('modal-event').classList.remove('flex');
+    }
+
+    function handleSaveEvent(e) {
+      e.preventDefault();
+      const id = document.getElementById('event-id-input').value;
+      const title = document.getElementById('event-title-input').value.trim();
+      const day = parseInt(document.getElementById('event-day-input').value, 10);
+      const durationRaw = document.getElementById('event-duration-input').value;
+      const isAllDay = durationRaw === 'all_day';
+      const duration = isAllDay ? 'all_day' : parseFloat(durationRaw);
+      const startHour = isAllDay ? 7 : parseInt(document.getElementById('event-starthour-input').value, 10);
+      const startMinute = isAllDay ? 0 : parseInt(document.getElementById('event-startminute-input').value, 10);
+      const category = document.getElementById('event-category-input').value.trim() || 'Trabalho';
+      const color = document.querySelector('input[name="event-color"]:checked')?.value || 'blue';
+
+      if (!title) return;
+
+      if (id) {
+        const ev = appState.events.find(i => i.id === id);
+        if (ev) {
+          ev.title = title;
+          ev.day = day;
+          ev.startHour = startHour;
+          ev.startMinute = startMinute;
+          ev.duration = duration;
+          ev.category = category;
+          ev.color = color;
+        }
+      } else {
+        appState.events.push({
+          id: 'ev-' + Date.now(),
+          title,
+          day,
+          startHour,
+          startMinute,
+          duration,
+          category,
+          color
+        });
+      }
+
+      closeEventModal();
+      saveState();
+    }
+
+    function handleDeleteCurrentEvent() {
+      const id = document.getElementById('event-id-input').value;
+      if (id && confirm("Deseja remover este evento da agenda?")) {
+        appState.events = appState.events.filter(i => i.id !== id);
+        closeEventModal();
+        saveState();
+      }
+    }
+
+    /* ================================================================= */
+    /* 2. TAREFAS DIÁRIAS (TO-DO) */
+    /* ================================================================= */
+    function renderTasks() {
+      const listEl = document.getElementById('task-list');
+      const badge = document.getElementById('tasks-progress-badge');
+      const bar = document.getElementById('tasks-progress-bar');
+
+      const total = appState.tasks.length;
+      const completed = appState.tasks.filter(t => t.completed).length;
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      if (badge) badge.innerText = `${completed} de ${total} (${pct}%)`;
+      if (bar) bar.style.width = `${pct}%`;
+
+      let filtered = appState.tasks;
+      if (currentTaskFilter === 'pending') filtered = appState.tasks.filter(t => !t.completed);
+      if (currentTaskFilter === 'completed') filtered = appState.tasks.filter(t => t.completed);
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<li class="py-6 text-center text-slate-400 text-xs">Nenhuma tarefa neste filtro.</li>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(t => {
+        const theme = getThemeForCategory(t.category, 'green');
+        return `
+          <li class="group flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-white transition-all">
+            <label class="flex items-center gap-2.5 flex-1 cursor-pointer select-none">
+              <input type="checkbox" class="custom-checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask('${t.id}')" />
+              <span class="text-sm font-medium ${t.completed ? 'line-through text-slate-400' : 'text-slate-800'}">
+                ${escapeHtml(t.text)}
+              </span>
+              ${t.category ? `
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md ml-1.5" style="background-color: ${theme.bg}; color: ${theme.text}; border: 1px solid ${theme.border};">
+                  ${escapeHtml(t.category)}
+                </span>
+              ` : ''}
+            </label>
+            <button onclick="deleteTask('${t.id}')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1 transition-opacity">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </li>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function handleAddTask(e) {
+      e.preventDefault();
+      const input = document.getElementById('input-task-text');
+      const cat = document.getElementById('input-task-category').value;
+      const text = input.value.trim();
+      if (!text) return;
+
+      appState.tasks.unshift({
+        id: 't-' + Date.now(),
+        text,
+        category: cat,
+        completed: false
+      });
+      input.value = '';
+      saveState();
+    }
+
+    function toggleTask(id) {
+      const t = appState.tasks.find(item => item.id === id);
+      if (t) {
+        t.completed = !t.completed;
+        saveState();
+      }
+    }
+
+    function deleteTask(id) {
+      appState.tasks = appState.tasks.filter(item => item.id !== id);
+      saveState();
+    }
+
+    function setTaskFilter(filter) {
+      currentTaskFilter = filter;
+      ['all', 'pending', 'completed'].forEach(f => {
+        const btn = document.getElementById(`filter-btn-${f}`);
+        if (f === filter) btn.className = 'px-2.5 py-1 rounded-lg font-medium bg-slate-900 text-white';
+        else btn.className = 'px-2.5 py-1 rounded-lg font-medium text-slate-500 hover:bg-slate-100';
+      });
+      renderTasks();
+    }
+
+    /* ================================================================= */
+    /* 3. RASTREADOR DE HÁBITOS */
+    /* ================================================================= */
+    function renderHabits() {
+      const listEl = document.getElementById('habit-list');
+      const rateEl = document.getElementById('habits-weekly-rate');
+
+      if (appState.habits.length === 0) {
+        listEl.innerHTML = `<div class="py-6 text-center text-slate-400 text-xs">Nenhum hábito cadastrado.</div>`;
+        return;
+      }
+
+      let checks = 0;
+      const totalPossible = appState.habits.length * 7;
+
+      listEl.innerHTML = appState.habits.map(h => {
+        const theme = getThemeForCategory(h.category, 'orange');
+        checks += h.days.filter(Boolean).length;
+
+        return `
+          <div class="grid grid-cols-12 gap-1 items-center p-2 rounded-xl bg-slate-50/60 hover:bg-slate-100/60 border border-slate-100 group">
+            <div class="col-span-5 flex items-center justify-between pr-2">
+              <span class="text-xs sm:text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${theme.badge};"></span>
+                <span class="truncate">${escapeHtml(h.name)}</span>
+              </span>
+              <button onclick="deleteHabit('${h.id}')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-0.5 transition-opacity">
+                <i data-lucide="trash-2" class="w-3 h-3"></i>
+              </button>
+            </div>
+            ${h.days.map((done, idx) => `
+              <div class="col-span-1 flex justify-center">
+                <button 
+                  onclick="toggleHabitDay('${h.id}', ${idx})"
+                  class="w-7 h-7 rounded-lg text-xs flex items-center justify-center transition-all ${
+                    done ? 'font-bold shadow-2xs' : 'bg-white border border-slate-200 hover:border-slate-400'
+                  }"
+                  style="${done ? `background-color: ${theme.badge}; color: #FFFFFF;` : ''}"
+                >
+                  <i data-lucide="check" class="w-3 h-3 ${done ? 'opacity-100' : 'opacity-0'}"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('');
+
+      const ratePct = totalPossible > 0 ? Math.round((checks / totalPossible) * 100) : 0;
+      if (rateEl) rateEl.innerText = `${ratePct}% de consistência (${checks}/${totalPossible})`;
+      lucide.createIcons();
+    }
+
+    function toggleAddHabitForm() {
+      const el = document.getElementById('habit-form-container');
+      el.classList.toggle('hidden');
+      if (!el.classList.contains('hidden')) document.getElementById('input-habit-name').focus();
+    }
+
+    function handleAddHabit(e) {
+      e.preventDefault();
+      const name = document.getElementById('input-habit-name').value.trim();
+      const cat = document.getElementById('input-habit-category').value;
+      if (!name) return;
+
+      appState.habits.push({
+        id: 'h-' + Date.now(),
+        name,
+        category: cat,
+        days: [false, false, false, false, false, false, false]
+      });
+      document.getElementById('input-habit-name').value = '';
+      toggleAddHabitForm();
+      saveState();
+    }
+
+    function toggleHabitDay(id, dayIdx) {
+      const h = appState.habits.find(item => item.id === id);
+      if (h) {
+        h.days[dayIdx] = !h.days[dayIdx];
+        saveState();
+      }
+    }
+
+    function deleteHabit(id) {
+      if (confirm("Remover este hábito?")) {
+        appState.habits = appState.habits.filter(item => item.id !== id);
+        saveState();
+      }
+    }
+
+    /* ================================================================= */
+    /* 4. METAS KANBAN */
+    /* ================================================================= */
+    let draggedGoalId = null;
+
+    function handleGoalDragStart(e, goalId) {
+      if (e.target.closest('button, input, select, label')) {
+        return;
+      }
+      draggedGoalId = goalId;
+      e.dataTransfer.setData('text/plain', goalId);
+      e.dataTransfer.effectAllowed = 'move';
+      const card = e.currentTarget;
+      setTimeout(() => {
+        if (card) card.classList.add('is-dragging');
+      }, 0);
+    }
+
+    function handleGoalDragEnd(e) {
+      if (e.currentTarget) e.currentTarget.classList.remove('is-dragging');
+      draggedGoalId = null;
+      document.querySelectorAll('.kanban-column').forEach(col => {
+        col.classList.remove('kanban-drag-over');
+      });
+      document.querySelectorAll('.kanban-card').forEach(c => {
+        c.classList.remove('kanban-card-drag-over');
+      });
+    }
+
+    function handleGoalColumnDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const col = e.currentTarget;
+      if (!col.classList.contains('kanban-drag-over')) {
+        col.classList.add('kanban-drag-over');
+      }
+    }
+
+    function handleGoalColumnDragLeave(e) {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('kanban-drag-over');
+      }
+    }
+
+    function handleGoalColumnDrop(e, targetStatus) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('kanban-drag-over');
+      document.querySelectorAll('.kanban-card').forEach(c => c.classList.remove('kanban-card-drag-over'));
+
+      const goalId = e.dataTransfer.getData('text/plain') || draggedGoalId;
+      if (!goalId) return;
+
+      const goal = appState.goals.find(g => g.id === goalId);
+      if (!goal) return;
+
+      if (goal.status !== targetStatus) {
+        goal.status = targetStatus;
+        saveState();
+      }
+      draggedGoalId = null;
+    }
+
+    function handleGoalCardDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      const card = e.currentTarget;
+      if (!card.classList.contains('kanban-card-drag-over')) {
+        card.classList.add('kanban-card-drag-over');
+      }
+    }
+
+    function handleGoalCardDragLeave(e) {
+      const card = e.currentTarget;
+      if (!card.contains(e.relatedTarget)) {
+        card.classList.remove('kanban-card-drag-over');
+      }
+    }
+
+    function handleGoalCardDrop(e, targetGoalId) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('kanban-drag-over'));
+      document.querySelectorAll('.kanban-card').forEach(c => c.classList.remove('kanban-card-drag-over'));
+
+      const goalId = e.dataTransfer.getData('text/plain') || draggedGoalId;
+      if (!goalId || goalId === targetGoalId) return;
+
+      const draggedGoal = appState.goals.find(g => g.id === goalId);
+      const targetGoal = appState.goals.find(g => g.id === targetGoalId);
+      if (!draggedGoal || !targetGoal) return;
+
+      // Move status para a coluna do alvo
+      draggedGoal.status = targetGoal.status;
+
+      // Reordena na lista
+      const draggedIdx = appState.goals.indexOf(draggedGoal);
+      appState.goals.splice(draggedIdx, 1);
+      const targetIdx = appState.goals.indexOf(targetGoal);
+      appState.goals.splice(targetIdx, 0, draggedGoal);
+
+      saveState();
+      draggedGoalId = null;
+    }
+
+    function renderGoals() {
+      const cols = {
+        todo: document.getElementById('col-todo'),
+        in_progress: document.getElementById('col-in_progress'),
+        done: document.getElementById('col-done')
+      };
+      const counts = { todo: 0, in_progress: 0, done: 0 };
+
+      Object.values(cols).forEach(col => { if (col) col.innerHTML = ''; });
+
+      appState.goals.forEach(g => {
+        const colKey = g.status || 'todo';
+        if (counts[colKey] !== undefined) counts[colKey]++;
+
+        const totalSubs = g.subtasks?.length || 0;
+        const doneSubs = g.subtasks?.filter(s => s.completed).length || 0;
+        const pct = totalSubs > 0 ? Math.round((doneSubs / totalSubs) * 100) : (g.status === 'done' ? 100 : 0);
+        const categoryName = g.category || 'Profissional';
+        const theme = getThemeForCategory(categoryName, 'purple');
+
+        const card = document.createElement('div');
+        card.id = `goal-card-${g.id}`;
+        card.setAttribute('draggable', 'true');
+        card.setAttribute('data-goal-id', g.id);
+        card.className = 'kanban-card bg-white rounded-xl p-4 border border-slate-200/80 shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between select-none group';
+
+        card.ondragstart = (e) => handleGoalDragStart(e, g.id);
+        card.ondragend = (e) => handleGoalDragEnd(e);
+        card.ondragover = (e) => handleGoalCardDragOver(e);
+        card.ondragleave = (e) => handleGoalCardDragLeave(e);
+        card.ondrop = (e) => handleGoalCardDrop(e, g.id);
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-slate-300 group-hover:text-slate-500 cursor-grab shrink-0 transition-colors" title="Arraste para mover de coluna (Trello)">
+                  <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
+                </span>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md truncate" style="background-color: ${theme.bg}; color: ${theme.text}; border: 1px solid ${theme.border};">
+                  ${escapeHtml(categoryName)}
+                </span>
+              </div>
+              <select onclick="event.stopPropagation()" onchange="changeGoalStatus('${g.id}', this.value)" class="text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-0.5 focus:outline-none">
+                <option value="todo" ${g.status === 'todo' ? 'selected' : ''}>A Fazer</option>
+                <option value="in_progress" ${g.status === 'in_progress' ? 'selected' : ''}>Em Andamento</option>
+                <option value="done" ${g.status === 'done' ? 'selected' : ''}>Concluído</option>
+              </select>
+            </div>
+
+            <h4 class="font-bold text-slate-900 text-sm mb-2.5 leading-snug">${escapeHtml(g.title)}</h4>
+
+            <!-- Barra de Progresso com Cor Suave -->
+            <div class="mb-3">
+              <div class="flex items-center justify-between text-[11px] text-slate-500 font-medium mb-1">
+                <span>Progresso</span>
+                <span class="font-bold" style="color: ${theme.badge};">${pct}%</span>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div class="h-1.5 rounded-full transition-all duration-300" style="width: ${pct}%; background-color: ${theme.badge};"></div>
+              </div>
+            </div>
+
+            ${totalSubs > 0 ? `
+              <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                ${g.subtasks.map(s => `
+                  <label class="flex items-start gap-2 text-xs text-slate-700 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      class="custom-checkbox mt-0.5 shrink-0" 
+                      ${s.completed ? 'checked' : ''} 
+                      onclick="event.stopPropagation()" 
+                      onchange="toggleSubtask('${g.id}', '${s.id}')" 
+                    />
+                    <span class="${s.completed ? 'line-through text-slate-400' : 'text-slate-700'} text-xs leading-snug">${escapeHtml(s.text)}</span>
+                  </label>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-xs">
+            <button onclick="event.stopPropagation(); promptAddSubtask('${g.id}')" class="text-slate-500 hover:text-slate-900 flex items-center gap-1 font-medium text-[11px] transition-colors">
+              <i data-lucide="plus" class="w-3 h-3"></i>
+              <span>Nova etapa</span>
+            </button>
+            <button onclick="event.stopPropagation(); deleteGoal('${g.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition-colors" title="Excluir meta">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        `;
+        if (cols[colKey]) cols[colKey].appendChild(card);
+      });
+
+      // Placeholders para colunas vazias
+      ['todo', 'in_progress', 'done'].forEach(colKey => {
+        if (counts[colKey] === 0 && cols[colKey]) {
+          cols[colKey].innerHTML = `
+            <div class="py-8 px-4 text-center text-slate-400 text-xs border border-dashed border-slate-200/90 rounded-xl pointer-events-none flex flex-col items-center justify-center gap-1.5 h-full min-h-[120px]">
+              <i data-lucide="move" class="w-4 h-4 opacity-40"></i>
+              <span>Arraste um card aqui</span>
+            </div>
+          `;
+        }
+      });
+
+      const countTodo = document.getElementById('count-todo');
+      const countInProgress = document.getElementById('count-in_progress');
+      const countDone = document.getElementById('count-done');
+      if (countTodo) countTodo.innerText = counts.todo;
+      if (countInProgress) countInProgress.innerText = counts.in_progress;
+      if (countDone) countDone.innerText = counts.done;
+
+      lucide.createIcons();
+    }
+
+    function toggleSubtask(goalId, subId) {
+      const g = appState.goals.find(item => item.id === goalId);
+      if (g && g.subtasks) {
+        const s = g.subtasks.find(sub => sub.id === subId);
+        if (s) {
+          s.completed = !s.completed;
+
+          const totalSubs = g.subtasks.length;
+          const doneSubs = g.subtasks.filter(i => i.completed).length;
+
+          // Se todas as tarefas do card forem concluídas, move para "done" (Concluído)
+          if (doneSubs === totalSubs && totalSubs > 0) {
+            g.status = 'done';
+          }
+          // Quando clicar no check de uma tarefa do card (pelo menos 1 concluída),
+          // move automaticamente para "in_progress" (Em Andamento)
+          else if (doneSubs > 0) {
+            g.status = 'in_progress';
+          }
+          // Se todas as tarefas foram desmarcadas (0 concluídas)
+          else if (doneSubs === 0) {
+            if (g.status === 'done') {
+              g.status = 'in_progress';
+            }
+          }
+
+          saveState();
+        }
+      }
+    }
+
+    function promptAddSubtask(goalId) {
+      const text = prompt("Nome da nova etapa:");
+      if (text && text.trim()) {
+        const g = appState.goals.find(item => item.id === goalId);
+        if (g) {
+          if (!g.subtasks) g.subtasks = [];
+          g.subtasks.push({ id: 'st-' + Date.now(), text: text.trim(), completed: false });
+          saveState();
+        }
+      }
+    }
+
+    function changeGoalStatus(id, newStatus) {
+      const g = appState.goals.find(item => item.id === id);
+      if (g) {
+        g.status = newStatus;
+        saveState();
+      }
+    }
+
+    function deleteGoal(id) {
+      if (confirm("Excluir esta meta?")) {
+        appState.goals = appState.goals.filter(item => item.id !== id);
+        saveState();
+      }
+    }
+
+    function openAddGoalModal() {
+      document.getElementById('modal-goal').classList.remove('hidden');
+      document.getElementById('modal-goal').classList.add('flex');
+      document.getElementById('goal-title-input').focus();
+    }
+
+    function closeAddGoalModal() {
+      document.getElementById('modal-goal').classList.add('hidden');
+      document.getElementById('modal-goal').classList.remove('flex');
+      document.getElementById('goal-title-input').value = '';
+      document.getElementById('goal-subtasks-input').value = '';
+    }
+
+    function handleCreateGoal(e) {
+      e.preventDefault();
+      const title = document.getElementById('goal-title-input').value.trim();
+      const category = document.getElementById('goal-category-input').value;
+      const status = document.getElementById('goal-status-input').value;
+      const subtasksRaw = document.getElementById('goal-subtasks-input').value;
+
+      if (!title) return;
+
+      const subtasks = subtasksRaw
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map((text, idx) => ({ id: 'st-' + Date.now() + '-' + idx, text, completed: false }));
+
+      appState.goals.push({
+        id: 'g-' + Date.now(),
+        title,
+        category,
+        status,
+        subtasks
+      });
+
+      closeAddGoalModal();
+      saveState();
+    }
+
+    /* ================================================================= */
+    /* 5. CHART.JS VISUAL */
+    /* ================================================================= */
+    function updateAnalyticsChart() {
+      const totalTasks = appState.tasks.length;
+      const doneTasks = appState.tasks.filter(t => t.completed).length;
+      document.getElementById('stat-tasks-done').innerText = doneTasks;
+      document.getElementById('stat-tasks-total').innerText = `/ ${totalTasks}`;
+      const taskPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
+      document.getElementById('stat-tasks-bar').style.width = `${taskPct}%`;
+
+      const totalHabitsPossible = appState.habits.length * 7;
+      let habitsDone = 0;
+      appState.habits.forEach(h => habitsDone += h.days.filter(Boolean).length);
+      document.getElementById('stat-habits-done').innerText = habitsDone;
+      document.getElementById('stat-habits-total').innerText = `/ ${totalHabitsPossible}`;
+      const habitPct = totalHabitsPossible > 0 ? (habitsDone / totalHabitsPossible) * 100 : 0;
+      document.getElementById('stat-habits-bar').style.width = `${habitPct}%`;
+
+      const totalGoals = appState.goals.length;
+      const doneGoals = appState.goals.filter(g => g.status === 'done').length;
+      document.getElementById('stat-goals-done').innerText = doneGoals;
+      document.getElementById('stat-goals-total').innerText = `de ${totalGoals}`;
+      const goalPct = totalGoals > 0 ? (doneGoals / totalGoals) * 100 : 0;
+      document.getElementById('stat-goals-bar').style.width = `${goalPct}%`;
+
+      const efficiency = Math.round((taskPct * 0.35) + (habitPct * 0.35) + (goalPct * 0.30));
+      document.getElementById('chart-center-percent').innerText = `${efficiency}%`;
+
+      const canvas = document.getElementById('productivityChart');
+      if (!canvas) return;
+
+      const chartData = {
+        labels: ['Tarefas', 'Hábitos', 'Metas', 'Agenda', 'Pendentes'],
+        datasets: [{
+          data: [
+            doneTasks,
+            habitsDone,
+            doneGoals,
+            appState.events.length,
+            Math.max(1, (totalTasks - doneTasks) + (totalHabitsPossible - habitsDone) + (totalGoals - doneGoals))
+          ],
+          backgroundColor: [
+            '#10B981', // Verde
+            '#F59E0B', // Âmbar
+            '#8B5CF6', // Roxo
+            '#0EA5E9', // Azul
+            '#E2E8F0'  // Neutro
+          ],
+          borderWidth: 0,
+          cutout: '75%'
+        }]
+      };
+
+      if (productivityChartInstance) {
+        productivityChartInstance.data = chartData;
+        productivityChartInstance.update();
+      } else {
+        const ctx = canvas.getContext('2d');
+        productivityChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: chartData,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ` ${ctx.label}: ${ctx.raw}`
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /* ================================================================= */
+    /* 6. NAVEGAÇÃO ENTRE TELAS SEPARADAS & MENU LATERAL */
+    /* ================================================================= */
+    const SCREENS = ['home', 'calendar', 'tasks', 'habits', 'goals'];
+
+    const SCREEN_TITLES = {
+      home: { header: 'Painel Principal', mobile: 'Início' },
+      calendar: { header: 'Agenda Semanal', mobile: 'Agenda' },
+      tasks: { header: 'Tarefas Diárias', mobile: 'Tarefas' },
+      habits: { header: 'Rastreador de Hábitos', mobile: 'Hábitos' },
+      goals: { header: 'Metas Pessoais & Profissionais', mobile: 'Metas' }
+    };
+
+    function openSidebar() {
+      const sidebar = document.getElementById('app-sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (sidebar) sidebar.classList.remove('-translate-x-full');
+      if (backdrop) backdrop.classList.remove('hidden');
+    }
+
+    function closeSidebar() {
+      const sidebar = document.getElementById('app-sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (sidebar) sidebar.classList.add('-translate-x-full');
+      if (backdrop) backdrop.classList.add('hidden');
+    }
+
+    function switchScreen(screenId) {
+      if (!SCREENS.includes(screenId)) screenId = 'home';
+      currentScreen = screenId;
+
+      // Recolhe a barra lateral no mobile automaticamente
+      closeSidebar();
+
+      // Mostra apenas a tela selecionada
+      SCREENS.forEach(id => {
+        const el = document.getElementById(`screen-${id}`);
+        if (el) {
+          if (id === screenId) {
+            el.classList.remove('hidden');
+          } else {
+            el.classList.add('hidden');
+          }
+        }
+      });
+
+      // Atualiza títulos do cabeçalho desktop e badge mobile
+      const info = SCREEN_TITLES[screenId] || SCREEN_TITLES.home;
+      const deskTitleEl = document.getElementById('desktop-header-title');
+      if (deskTitleEl) deskTitleEl.innerText = info.header;
+
+      const mobBadgeEl = document.getElementById('mobile-current-screen-badge');
+      if (mobBadgeEl) mobBadgeEl.innerText = info.mobile;
+
+      // Atualiza botões do menu lateral
+      SCREENS.forEach(id => {
+        const btn = document.getElementById(`nav-btn-${id}`);
+        if (btn) {
+          const icon = btn.querySelector('i');
+          if (id === screenId) {
+            btn.className = 'nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 text-white shadow-xs transition-all cursor-pointer text-left';
+            if (icon) icon.className = 'w-4 h-4 shrink-0 text-sky-400';
+          } else {
+            btn.className = 'nav-item group w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer text-left';
+            if (icon) icon.className = 'w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-600';
+          }
+        }
+      });
+
+      updateHeaderInfo();
+
+      // Renders específicos ao trocar de tela
+      if (screenId === 'home') {
+        renderHomeScreen();
+        updateAnalyticsChart();
+      } else if (screenId === 'calendar') {
+        renderCalendar();
+      } else if (screenId === 'tasks') {
+        renderTasks();
+      } else if (screenId === 'habits') {
+        renderHabits();
+      } else if (screenId === 'goals') {
+        renderGoals();
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      lucide.createIcons();
+    }
+
+    function promptEditUserName() {
+      const current = appState.userName || 'Bookflow';
+      const novo = prompt('Como você gostaria de ser chamado?', current);
+      if (novo !== null && novo.trim() !== '') {
+        appState.userName = novo.trim();
+        saveState();
+      }
+    }
+
+    function renderHomeScreen() {
+      // 1. Nome do Usuário
+      const userNameEl = document.getElementById('welcome-user-name-text');
+      if (userNameEl) {
+        userNameEl.innerText = appState.userName || 'Bookflow';
+      }
+
+      // 2. Data formatada para a saudação
+      const welcomeDateEl = document.getElementById('welcome-date-text');
+      if (welcomeDateEl) {
+        const now = new Date();
+        const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+        const formatted = now.toLocaleDateString('pt-BR', options);
+        welcomeDateEl.innerText = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+      }
+
+      // 3. Próximos compromissos na tela inicial
+      const eventsContainer = document.getElementById('home-upcoming-events');
+      if (eventsContainer) {
+        eventsContainer.innerHTML = '';
+        const sortedEvents = [...appState.events].sort((a, b) => {
+          if (a.day !== b.day) return a.day - b.day;
+          return a.startHour - b.startHour;
+        });
+
+        if (sortedEvents.length === 0) {
+          eventsContainer.innerHTML = `
+            <div class="py-6 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl flex flex-col items-center gap-1.5">
+              <i data-lucide="calendar" class="w-4 h-4 opacity-40"></i>
+              <span>Nenhum evento agendado para esta semana.</span>
+              <button onclick="switchScreen('calendar'); openNewEventModal();" class="text-sky-600 hover:text-sky-800 font-semibold mt-1 cursor-pointer">
+                + Agendar agora
+              </button>
+            </div>
+          `;
+        } else {
+          sortedEvents.slice(0, 3).forEach(ev => {
+            const dayName = DAY_NAMES_FULL[ev.day] || 'Semana';
+            const theme = getThemeForCategory(ev.category || 'Trabalho', ev.color || 'blue');
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 transition-all';
+            item.innerHTML = `
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${theme.badge};"></span>
+                <div class="min-w-0">
+                  <h4 class="text-xs font-bold text-slate-800 truncate">${escapeHtml(ev.title)}</h4>
+                  <span class="text-[11px] text-slate-500">${dayName} às ${String(ev.startHour).padStart(2, '0')}:${String(ev.startMinute || 0).padStart(2, '0')}</span>
+                </div>
+              </div>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 ml-2" style="background-color: ${theme.bg}; color: ${theme.text}; border: 1px solid ${theme.border};">
+                ${escapeHtml(ev.category || 'Geral')}
+              </span>
+            `;
+            eventsContainer.appendChild(item);
+          });
+        }
+      }
+
+      // 4. Tarefas prioritárias na tela inicial
+      const tasksContainer = document.getElementById('home-priority-tasks');
+      if (tasksContainer) {
+        tasksContainer.innerHTML = '';
+        const pendingTasks = appState.tasks.filter(t => !t.completed);
+
+        if (pendingTasks.length === 0) {
+          tasksContainer.innerHTML = `
+            <div class="py-6 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl flex flex-col items-center gap-1.5">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
+              <span class="text-slate-600 font-medium">Todas as tarefas de hoje concluídas!</span>
+              <button onclick="switchScreen('tasks')" class="text-emerald-600 hover:text-emerald-800 font-semibold mt-1 cursor-pointer">
+                + Adicionar nova tarefa
+              </button>
+            </div>
+          `;
+        } else {
+          pendingTasks.slice(0, 3).forEach(task => {
+            const theme = getThemeForCategory(task.category || 'Geral', 'emerald');
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 transition-all';
+            item.innerHTML = `
+              <div class="flex items-center gap-2.5 min-w-0">
+                <input 
+                  type="checkbox" 
+                  class="custom-checkbox shrink-0" 
+                  onchange="toggleTask('${task.id}')" 
+                />
+                <span class="text-xs font-medium text-slate-800 truncate">${escapeHtml(task.text)}</span>
+              </div>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 ml-2" style="background-color: ${theme.bg}; color: ${theme.text}; border: 1px solid ${theme.border};">
+                ${escapeHtml(task.category || 'Geral')}
+              </span>
+            `;
+            tasksContainer.appendChild(item);
+          });
+        }
+      }
+    }
+
+    function renderAll() {
+      updateHeaderInfo();
+      renderHomeScreen();
+      renderCalendar();
+      renderTasks();
+      renderHabits();
+      renderGoals();
+      updateAnalyticsChart();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderAll();
+      switchScreen('home');
+      loadInitialData();
+    });
+  </script>
+</body>
+</html>
