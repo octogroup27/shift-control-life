@@ -1,12 +1,16 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { HabitItem } from '../types.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const habitsRouter = Router();
+
+habitsRouter.use(requireAuth);
 
 function mapDbToHabit(row: any): HabitItem {
   return {
     id: row.id,
+    userId: row.user_id,
     name: row.name,
     category: row.category,
     days: Array.isArray(row.days) ? row.days : [false, false, false, false, false, false, false],
@@ -16,12 +20,14 @@ function mapDbToHabit(row: any): HabitItem {
 }
 
 // GET /api/habits
-habitsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+habitsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
       const { data, error } = await supabase
         .from('habits')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -39,8 +45,9 @@ habitsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/habits
-habitsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
+habitsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id, name, category, days } = req.body;
     if (!name || typeof name !== 'string') {
       res.status(400).json({ error: 'name é obrigatório' });
@@ -49,6 +56,7 @@ habitsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const newHabit: HabitItem = {
       id: id || `h-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
       name: name.trim(),
       category: category || 'Geral',
       days: Array.isArray(days) && days.length === 7 ? days : [false, false, false, false, false, false, false],
@@ -56,9 +64,10 @@ habitsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     localStore.habits.push(newHabit);
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const { error } = await supabase.from('habits').insert({
         id: newHabit.id,
+        user_id: userId,
         name: newHabit.name,
         category: newHabit.category,
         days: newHabit.days,
@@ -79,8 +88,9 @@ habitsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 // PATCH /api/habits/:id
-habitsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => {
+habitsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     const { days, name, category } = req.body;
 
@@ -91,7 +101,7 @@ habitsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> =>
       if (category !== undefined) habit.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -99,7 +109,12 @@ habitsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> =>
       if (name !== undefined) dbUpdates.name = name;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase.from('habits').update(dbUpdates).eq('id', id);
+      const { error } = await supabase
+        .from('habits')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao atualizar hábito no Supabase:', error);
         res.status(500).json({ error: 'Erro ao atualizar hábito no banco' });
@@ -115,13 +130,19 @@ habitsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> =>
 });
 
 // DELETE /api/habits/:id
-habitsRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+habitsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     localStore.habits = localStore.habits.filter(h => h.id !== id);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('habits').delete().eq('id', id);
+    if (isSupabaseConfigured() && supabase && userId) {
+      const { error } = await supabase
+        .from('habits')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao remover hábito no Supabase:', error);
         res.status(500).json({ error: 'Erro ao deletar hábito no banco' });

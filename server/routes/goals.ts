@@ -1,17 +1,22 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { GoalItem, GoalSubtask } from '../types.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const goalsRouter = Router();
 
+goalsRouter.use(requireAuth);
+
 // GET /api/goals
-goalsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+goalsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
       const { data, error } = await supabase
         .from('goals')
         .select(`
           id,
+          user_id,
           title,
           category,
           status,
@@ -24,6 +29,7 @@ goalsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
             created_at
           )
         `)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -31,6 +37,7 @@ goalsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
       } else if (data) {
         const goals: GoalItem[] = data.map((g: any) => ({
           id: g.id,
+          userId: g.user_id,
           title: g.title,
           category: g.category,
           status: g.status,
@@ -55,8 +62,9 @@ goalsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/goals
-goalsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id, title, category, status, subtasks } = req.body;
     if (!title || typeof title !== 'string') {
       res.status(400).json({ error: 'title é obrigatório' });
@@ -74,6 +82,7 @@ goalsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const newGoal: GoalItem = {
       id: goalId,
+      userId,
       title: title.trim(),
       category: category || 'Geral',
       status: (status as any) || 'todo',
@@ -82,9 +91,10 @@ goalsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     localStore.goals.push(newGoal);
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const { error: goalError } = await supabase.from('goals').insert({
         id: newGoal.id,
+        user_id: userId,
         title: newGoal.title,
         category: newGoal.category,
         status: newGoal.status,
@@ -118,8 +128,9 @@ goalsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 // PATCH /api/goals/:id
-goalsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     const { status, title, category } = req.body;
 
@@ -130,7 +141,7 @@ goalsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
       if (category !== undefined) goal.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -138,7 +149,12 @@ goalsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
       if (title !== undefined) dbUpdates.title = title;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase.from('goals').update(dbUpdates).eq('id', id);
+      const { error } = await supabase
+        .from('goals')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao atualizar meta no Supabase:', error);
         res.status(500).json({ error: 'Erro ao atualizar meta no banco' });
@@ -154,13 +170,19 @@ goalsRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
 });
 
 // DELETE /api/goals/:id
-goalsRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     localStore.goals = localStore.goals.filter(g => g.id !== id);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('goals').delete().eq('id', id);
+    if (isSupabaseConfigured() && supabase && userId) {
+      const { error } = await supabase
+        .from('goals')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao deletar meta no Supabase:', error);
         res.status(500).json({ error: 'Erro ao deletar meta no banco' });
@@ -176,7 +198,7 @@ goalsRouter.delete('/:id', async (req: Request, res: Response): Promise<void> =>
 });
 
 // POST /api/goals/:id/subtasks
-goalsRouter.post('/:id/subtasks', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.post('/:id/subtasks', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id: goalId } = req.params;
     const { text, completed } = req.body;
@@ -222,7 +244,7 @@ goalsRouter.post('/:id/subtasks', async (req: Request, res: Response): Promise<v
 });
 
 // PATCH /api/goals/:id/subtasks/:subtaskId
-goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id: goalId, subtaskId } = req.params;
     const { completed, text } = req.body;
@@ -260,7 +282,7 @@ goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: Request, res: Response
 });
 
 // DELETE /api/goals/:id/subtasks/:subtaskId
-goalsRouter.delete('/:id/subtasks/:subtaskId', async (req: Request, res: Response): Promise<void> => {
+goalsRouter.delete('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id: goalId, subtaskId } = req.params;
 

@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore, initialDefaultState } from '../supabase.js';
-import { AppState, EventItem, GoalItem, HabitItem, TaskItem } from '../types.js';
+import { EventItem, GoalItem, HabitItem, TaskItem } from '../types.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const stateRouter = Router();
 
-// GET /api/health
+// GET /api/health - Endpoint público de verificação
 stateRouter.get('/health', async (_req: Request, res: Response): Promise<void> => {
   const configured = isSupabaseConfigured();
   let supabaseConnected = false;
@@ -19,7 +20,7 @@ stateRouter.get('/health', async (_req: Request, res: Response): Promise<void> =
         supabaseConnected = true;
         supabaseMessage = 'Conectado e sincronizado com o Supabase';
       } else {
-        supabaseMessage = `Erro ao consultar Supabase: ${error.message}`;
+        supabaseMessage = `Status Supabase: ${error.message}`;
       }
     } catch (e: any) {
       supabaseMessage = `Falha na conexão com Supabase: ${e.message}`;
@@ -38,41 +39,46 @@ stateRouter.get('/health', async (_req: Request, res: Response): Promise<void> =
   });
 });
 
-// GET /api/state - Retorna o estado completo da aplicação
-stateRouter.get('/state', async (_req: Request, res: Response): Promise<void> => {
+// GET /api/state - Retorna o estado completo exclusivo do usuário autenticado
+stateRouter.get('/state', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
-      // 1. Busca perfil
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
+      // 1. Busca perfil do usuário
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('user_name')
-        .eq('id', 'default-user')
+        .select('user_name, email')
+        .eq('id', userId)
         .single();
 
-      // 2. Busca eventos
+      // 2. Busca eventos do usuário
       const { data: eventsData } = await supabase
         .from('events')
         .select('*')
+        .eq('user_id', userId)
         .order('day', { ascending: true })
         .order('start_hour', { ascending: true });
 
-      // 3. Busca tarefas
+      // 3. Busca tarefas do usuário
       const { data: tasksData } = await supabase
         .from('tasks')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      // 4. Busca hábitos
+      // 4. Busca hábitos do usuário
       const { data: habitsData } = await supabase
         .from('habits')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
-      // 5. Busca metas e subtarefas
+      // 5. Busca metas do usuário com subtarefas
       const { data: goalsData } = await supabase
         .from('goals')
         .select(`
           id,
+          user_id,
           title,
           category,
           status,
@@ -85,65 +91,55 @@ stateRouter.get('/state', async (_req: Request, res: Response): Promise<void> =>
             created_at
           )
         `)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
-      const mappedEvents: EventItem[] = eventsData
-        ? eventsData.map((row: any) => ({
-            id: row.id,
-            title: row.title,
-            day: Number(row.day),
-            startHour: Number(row.start_hour),
-            startMinute: Number(row.start_minute ?? 0),
-            duration: Number(row.duration),
-            color: row.color,
-            category: row.category,
-          }))
-        : localStore.events;
+      const mappedEvents: EventItem[] = (eventsData || []).map((row: any) => ({
+        id: row.id,
+        userId: row.user_id,
+        title: row.title,
+        day: Number(row.day),
+        startHour: Number(row.start_hour),
+        startMinute: Number(row.start_minute ?? 0),
+        duration: Number(row.duration),
+        color: row.color,
+        category: row.category,
+      }));
 
-      const mappedTasks: TaskItem[] = tasksData
-        ? tasksData.map((row: any) => ({
-            id: row.id,
-            text: row.text,
-            completed: Boolean(row.completed),
-            category: row.category,
-          }))
-        : localStore.tasks;
+      const mappedTasks: TaskItem[] = (tasksData || []).map((row: any) => ({
+        id: row.id,
+        userId: row.user_id,
+        text: row.text,
+        completed: Boolean(row.completed),
+        category: row.category,
+      }));
 
-      const mappedHabits: HabitItem[] = habitsData
-        ? habitsData.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            category: row.category,
-            days: Array.isArray(row.days) ? row.days : [false, false, false, false, false, false, false],
-          }))
-        : localStore.habits;
+      const mappedHabits: HabitItem[] = (habitsData || []).map((row: any) => ({
+        id: row.id,
+        userId: row.user_id,
+        name: row.name,
+        category: row.category,
+        days: Array.isArray(row.days) ? row.days : [false, false, false, false, false, false, false],
+      }));
 
-      const mappedGoals: GoalItem[] = goalsData
-        ? goalsData.map((g: any) => ({
-            id: g.id,
-            title: g.title,
-            category: g.category,
-            status: g.status,
-            subtasks: (g.goal_subtasks || []).map((st: any) => ({
-              id: st.id,
-              text: st.text,
-              completed: Boolean(st.completed),
-            })),
-          }))
-        : localStore.goals;
+      const mappedGoals: GoalItem[] = (goalsData || []).map((g: any) => ({
+        id: g.id,
+        userId: g.user_id,
+        title: g.title,
+        category: g.category,
+        status: g.status,
+        subtasks: (g.goal_subtasks || []).map((st: any) => ({
+          id: st.id,
+          text: st.text,
+          completed: Boolean(st.completed),
+        })),
+      }));
 
-      // Se o banco tiver dados, sincroniza com o localStore e retorna
-      const userName = profileData?.user_name || localStore.userName || 'Bookflow';
-
-      // Atualiza cache local
-      localStore.userName = userName;
-      localStore.events = mappedEvents;
-      localStore.tasks = mappedTasks;
-      localStore.habits = mappedHabits;
-      localStore.goals = mappedGoals;
+      const userName = profileData?.user_name || req.userName || 'Usuário';
 
       res.json({
         userName,
+        userEmail: profileData?.email || req.userEmail,
         events: mappedEvents,
         tasks: mappedTasks,
         habits: mappedHabits,
@@ -155,36 +151,37 @@ stateRouter.get('/state', async (_req: Request, res: Response): Promise<void> =>
 
     res.json({
       ...localStore,
+      userName: req.userName || localStore.userName,
+      userEmail: req.userEmail,
       source: 'local',
     });
   } catch (err) {
     console.error('Falha ao processar GET /api/state:', err);
-    res.json({
-      ...localStore,
-      source: 'local_fallback',
-    });
+    res.status(500).json({ error: 'Erro ao buscar dados do usuário.' });
   }
 });
 
-// PUT /api/state - Sincronização em lote do estado
-stateRouter.put('/state', async (req: Request, res: Response): Promise<void> => {
+// PUT /api/state - Sincronização em lote isolada para o usuário autenticado
+stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { userName, events, tasks, habits, goals } = req.body;
-    if (userName) localStore.userName = userName;
-    if (Array.isArray(events)) localStore.events = events;
-    if (Array.isArray(tasks)) localStore.tasks = tasks;
-    if (Array.isArray(habits)) localStore.habits = habits;
-    if (Array.isArray(goals)) localStore.goals = goals;
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       if (userName) {
-        await supabase.from('profiles').upsert({ id: 'default-user', user_name: userName });
+        await supabase.from('profiles').upsert({
+          id: userId,
+          user_name: userName,
+          updated_at: new Date().toISOString(),
+        });
       }
+
       if (Array.isArray(events)) {
-        await supabase.from('events').delete().neq('id', '___none___');
+        await supabase.from('events').delete().eq('user_id', userId);
         if (events.length > 0) {
           const rows = events.map(e => ({
             id: e.id,
+            user_id: userId,
             title: e.title,
             day: e.day,
             start_hour: e.startHour,
@@ -196,11 +193,13 @@ stateRouter.put('/state', async (req: Request, res: Response): Promise<void> => 
           await supabase.from('events').insert(rows);
         }
       }
+
       if (Array.isArray(tasks)) {
-        await supabase.from('tasks').delete().neq('id', '___none___');
+        await supabase.from('tasks').delete().eq('user_id', userId);
         if (tasks.length > 0) {
           const rows = tasks.map(t => ({
             id: t.id,
+            user_id: userId,
             text: t.text,
             completed: t.completed,
             category: t.category,
@@ -208,11 +207,13 @@ stateRouter.put('/state', async (req: Request, res: Response): Promise<void> => 
           await supabase.from('tasks').insert(rows);
         }
       }
+
       if (Array.isArray(habits)) {
-        await supabase.from('habits').delete().neq('id', '___none___');
+        await supabase.from('habits').delete().eq('user_id', userId);
         if (habits.length > 0) {
           const rows = habits.map(h => ({
             id: h.id,
+            user_id: userId,
             name: h.name,
             category: h.category,
             days: h.days,
@@ -220,12 +221,14 @@ stateRouter.put('/state', async (req: Request, res: Response): Promise<void> => 
           await supabase.from('habits').insert(rows);
         }
       }
+
       if (Array.isArray(goals)) {
-        await supabase.from('goal_subtasks').delete().neq('id', '___none___');
-        await supabase.from('goals').delete().neq('id', '___none___');
+        // Exclui metas anteriores deste usuário (subtarefas são excluídas em cascata)
+        await supabase.from('goals').delete().eq('user_id', userId);
         for (const g of goals) {
           await supabase.from('goals').insert({
             id: g.id,
+            user_id: userId,
             title: g.title,
             category: g.category,
             status: g.status,
@@ -241,38 +244,36 @@ stateRouter.put('/state', async (req: Request, res: Response): Promise<void> => 
           }
         }
       }
+    } else {
+      if (userName) localStore.userName = userName;
+      if (Array.isArray(events)) localStore.events = events;
+      if (Array.isArray(tasks)) localStore.tasks = tasks;
+      if (Array.isArray(habits)) localStore.habits = habits;
+      if (Array.isArray(goals)) localStore.goals = goals;
     }
 
     res.json({ success: true, timestamp: new Date().toISOString() });
   } catch (err) {
     console.error('Erro ao sincronizar PUT /api/state:', err);
-    res.status(500).json({ error: 'Falha ao sincronizar dados' });
+    res.status(500).json({ error: 'Falha ao sincronizar dados do usuário' });
   }
 });
 
-
-// POST /api/reset - Restaura dados de demonstração
-stateRouter.post('/reset', async (_req: Request, res: Response): Promise<void> => {
+// POST /api/reset - Restaura dados padrão exclusivamente para o usuário autenticado
+stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    // Restaura localStore
-    localStore.userName = initialDefaultState.userName;
-    localStore.events = JSON.parse(JSON.stringify(initialDefaultState.events));
-    localStore.tasks = JSON.parse(JSON.stringify(initialDefaultState.tasks));
-    localStore.habits = JSON.parse(JSON.stringify(initialDefaultState.habits));
-    localStore.goals = JSON.parse(JSON.stringify(initialDefaultState.goals));
+    const userId = req.userId;
 
-    if (isSupabaseConfigured() && supabase) {
-      // Limpa tabelas no Supabase e reinsere seed
-      await supabase.from('goal_subtasks').delete().neq('id', '___none___');
-      await supabase.from('goals').delete().neq('id', '___none___');
-      await supabase.from('habits').delete().neq('id', '___none___');
-      await supabase.from('tasks').delete().neq('id', '___none___');
-      await supabase.from('events').delete().neq('id', '___none___');
-      await supabase.from('profiles').upsert({ id: 'default-user', user_name: 'Bookflow' });
+    if (isSupabaseConfigured() && supabase && userId) {
+      await supabase.from('goals').delete().eq('user_id', userId);
+      await supabase.from('habits').delete().eq('user_id', userId);
+      await supabase.from('tasks').delete().eq('user_id', userId);
+      await supabase.from('events').delete().eq('user_id', userId);
 
-      // Re-insere eventos
-      const eventsToInsert = initialDefaultState.events.map(e => ({
-        id: e.id,
+      // Reinsere dados de demonstração vinculados a este usuário
+      const events = initialDefaultState.events.map(e => ({
+        id: `ev-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
+        user_id: userId,
         title: e.title,
         day: e.day,
         start_hour: e.startHour,
@@ -281,53 +282,54 @@ stateRouter.post('/reset', async (_req: Request, res: Response): Promise<void> =
         color: e.color,
         category: e.category,
       }));
-      await supabase.from('events').insert(eventsToInsert);
+      await supabase.from('events').insert(events);
 
-      // Re-insere tarefas
-      const tasksToInsert = initialDefaultState.tasks.map(t => ({
-        id: t.id,
+      const tasks = initialDefaultState.tasks.map(t => ({
+        id: `t-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
+        user_id: userId,
         text: t.text,
         completed: t.completed,
         category: t.category,
       }));
-      await supabase.from('tasks').insert(tasksToInsert);
+      await supabase.from('tasks').insert(tasks);
 
-      // Re-insere hábitos
-      const habitsToInsert = initialDefaultState.habits.map(h => ({
-        id: h.id,
+      const habits = initialDefaultState.habits.map(h => ({
+        id: `h-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
+        user_id: userId,
         name: h.name,
         category: h.category,
         days: h.days,
       }));
-      await supabase.from('habits').insert(habitsToInsert);
+      await supabase.from('habits').insert(habits);
 
-      // Re-insere metas e subtarefas
       for (const g of initialDefaultState.goals) {
+        const goalId = `g-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`;
         await supabase.from('goals').insert({
-          id: g.id,
+          id: goalId,
+          user_id: userId,
           title: g.title,
           category: g.category,
           status: g.status,
         });
+
         if (g.subtasks && g.subtasks.length > 0) {
-          const subtasksToInsert = g.subtasks.map(st => ({
-            id: st.id,
-            goal_id: g.id,
+          const subtasks = g.subtasks.map(st => ({
+            id: `st-${Math.random().toString(36).substring(2, 8)}`,
+            goal_id: goalId,
             text: st.text,
             completed: st.completed,
           }));
-          await supabase.from('goal_subtasks').insert(subtasksToInsert);
+          await supabase.from('goal_subtasks').insert(subtasks);
         }
       }
     }
 
     res.json({
       success: true,
-      message: 'Dados restaurados para o padrão com sucesso',
-      state: initialDefaultState,
+      message: 'Dados restaurados com sucesso para a sua conta',
     });
   } catch (err) {
     console.error('Falha ao processar POST /api/reset:', err);
-    res.status(500).json({ error: 'Erro ao restaurar dados de demonstração' });
+    res.status(500).json({ error: 'Erro ao restaurar dados padrão' });
   }
 });

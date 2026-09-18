@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { authRouter } from './routes/auth.js';
 import { profileRouter } from './routes/profile.js';
 import { eventsRouter } from './routes/events.js';
 import { tasksRouter } from './routes/tasks.js';
@@ -26,6 +27,7 @@ app.use((req, _res, next) => {
 const apiRouter = Router();
 
 // Rotas da API
+apiRouter.use('/auth', authRouter);
 apiRouter.use('/profile', profileRouter);
 apiRouter.use('/events', eventsRouter);
 apiRouter.use('/tasks', tasksRouter);

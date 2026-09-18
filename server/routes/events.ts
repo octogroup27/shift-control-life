@@ -1,13 +1,16 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { EventItem } from '../types.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const eventsRouter = Router();
 
-// Converte registro do banco Supabase para EventItem em camelCase
+eventsRouter.use(requireAuth);
+
 function mapDbToEvent(row: any): EventItem {
   return {
     id: row.id,
+    userId: row.user_id,
     title: row.title,
     day: Number(row.day),
     startHour: Number(row.start_hour),
@@ -21,12 +24,14 @@ function mapDbToEvent(row: any): EventItem {
 }
 
 // GET /api/events
-eventsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+eventsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .eq('user_id', userId)
         .order('day', { ascending: true })
         .order('start_hour', { ascending: true });
 
@@ -45,8 +50,9 @@ eventsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/events
-eventsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
+eventsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const body = req.body as Partial<EventItem>;
     if (!body.title || body.day === undefined || body.startHour === undefined) {
       res.status(400).json({ error: 'title, day e startHour são campos obrigatórios' });
@@ -55,6 +61,7 @@ eventsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const newEvent: EventItem = {
       id: body.id || `ev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
       title: body.title,
       day: Number(body.day),
       startHour: Number(body.startHour),
@@ -66,9 +73,10 @@ eventsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     localStore.events.push(newEvent);
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const { error } = await supabase.from('events').insert({
         id: newEvent.id,
+        user_id: userId,
         title: newEvent.title,
         day: newEvent.day,
         start_hour: newEvent.startHour,
@@ -93,8 +101,9 @@ eventsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 // PUT /api/events/:id
-eventsRouter.put('/:id', async (req: Request, res: Response): Promise<void> => {
+eventsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     const updates = req.body as Partial<EventItem>;
 
@@ -107,7 +116,7 @@ eventsRouter.put('/:id', async (req: Request, res: Response): Promise<void> => {
       };
     }
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -120,7 +129,12 @@ eventsRouter.put('/:id', async (req: Request, res: Response): Promise<void> => {
       if (updates.color !== undefined) dbUpdates.color = updates.color;
       if (updates.category !== undefined) dbUpdates.category = updates.category;
 
-      const { error } = await supabase.from('events').update(dbUpdates).eq('id', id);
+      const { error } = await supabase
+        .from('events')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao atualizar evento no Supabase:', error);
         res.status(500).json({ error: 'Erro ao atualizar evento no banco' });
@@ -137,13 +151,19 @@ eventsRouter.put('/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // DELETE /api/events/:id
-eventsRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+eventsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     localStore.events = localStore.events.filter(e => e.id !== id);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('events').delete().eq('id', id);
+    if (isSupabaseConfigured() && supabase && userId) {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao deletar evento no Supabase:', error);
         res.status(500).json({ error: 'Erro ao remover evento no banco' });

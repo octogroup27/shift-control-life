@@ -1,12 +1,16 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { TaskItem } from '../types.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const tasksRouter = Router();
+
+tasksRouter.use(requireAuth);
 
 function mapDbToTask(row: any): TaskItem {
   return {
     id: row.id,
+    userId: row.user_id,
     text: row.text,
     completed: Boolean(row.completed),
     category: row.category,
@@ -16,12 +20,14 @@ function mapDbToTask(row: any): TaskItem {
 }
 
 // GET /api/tasks
-tasksRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+tasksRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -39,8 +45,9 @@ tasksRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/tasks
-tasksRouter.post('/', async (req: Request, res: Response): Promise<void> => {
+tasksRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id, text, completed, category } = req.body;
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'text é obrigatório' });
@@ -49,6 +56,7 @@ tasksRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const newTask: TaskItem = {
       id: id || `t-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
       text: text.trim(),
       completed: Boolean(completed),
       category: category || 'Geral',
@@ -56,9 +64,10 @@ tasksRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
     localStore.tasks.unshift(newTask);
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const { error } = await supabase.from('tasks').insert({
         id: newTask.id,
+        user_id: userId,
         text: newTask.text,
         completed: newTask.completed,
         category: newTask.category,
@@ -79,8 +88,9 @@ tasksRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 // PATCH /api/tasks/:id
-tasksRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => {
+tasksRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     const { completed, text, category } = req.body;
 
@@ -91,7 +101,7 @@ tasksRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
       if (category !== undefined) task.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -99,7 +109,12 @@ tasksRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
       if (text !== undefined) dbUpdates.text = text;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', id);
+      const { error } = await supabase
+        .from('tasks')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao atualizar tarefa no Supabase:', error);
         res.status(500).json({ error: 'Erro ao atualizar tarefa no banco' });
@@ -115,13 +130,19 @@ tasksRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
 });
 
 // DELETE /api/tasks/:id
-tasksRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+tasksRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { id } = req.params;
     localStore.tasks = localStore.tasks.filter(t => t.id !== id);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (isSupabaseConfigured() && supabase && userId) {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
       if (error) {
         console.error('Erro ao deletar tarefa no Supabase:', error);
         res.status(500).json({ error: 'Erro ao deletar tarefa no banco' });

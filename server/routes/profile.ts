@@ -1,27 +1,31 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const profileRouter = Router();
 
+profileRouter.use(requireAuth);
+
 // GET /api/profile
-profileRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+profileRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
+    const userId = req.userId;
+    if (isSupabaseConfigured() && supabase && userId) {
       const { data, error } = await supabase
         .from('profiles')
-        .select('user_name')
-        .eq('id', 'default-user')
+        .select('user_name, email')
+        .eq('id', userId)
         .single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Erro ao buscar perfil no Supabase:', error);
       }
       if (data) {
-        res.json({ userName: data.user_name });
+        res.json({ userName: data.user_name, email: data.email });
         return;
       }
     }
-    res.json({ userName: localStore.userName });
+    res.json({ userName: req.userName || localStore.userName, email: req.userEmail });
   } catch (err) {
     console.error('Falha ao processar GET /api/profile:', err);
     res.status(500).json({ error: 'Erro interno ao buscar perfil' });
@@ -29,8 +33,9 @@ profileRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // PUT /api/profile
-profileRouter.put('/', async (req: Request, res: Response): Promise<void> => {
+profileRouter.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const { userName } = req.body;
     if (!userName || typeof userName !== 'string') {
       res.status(400).json({ error: 'userName é obrigatório e deve ser uma string' });
@@ -39,11 +44,11 @@ profileRouter.put('/', async (req: Request, res: Response): Promise<void> => {
 
     localStore.userName = userName.trim();
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && supabase && userId) {
       const { error } = await supabase
         .from('profiles')
         .upsert({
-          id: 'default-user',
+          id: userId,
           user_name: userName.trim(),
           updated_at: new Date().toISOString(),
         });
@@ -55,7 +60,7 @@ profileRouter.put('/', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    res.json({ userName: localStore.userName, success: true });
+    res.json({ userName: userName.trim(), success: true });
   } catch (err) {
     console.error('Falha ao processar PUT /api/profile:', err);
     res.status(500).json({ error: 'Erro interno ao atualizar perfil' });

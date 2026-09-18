@@ -178,31 +178,31 @@
         </div>
 
         <!-- Usuário & Saudação Rápida -->
-        <div class="px-4 py-3 mx-4 my-3 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-center justify-between gap-2.5">
+        <div class="px-3.5 py-3 mx-3.5 my-3 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-center justify-between gap-2">
           <div class="flex items-center gap-2.5 min-w-0">
             <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 border border-purple-200 flex items-center justify-center font-bold text-xs shrink-0">
-              <span id="sidebar-user-avatar">B</span>
+              <span id="sidebar-user-avatar">U</span>
             </div>
             <div class="min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Conta</p>
+              <p id="sidebar-user-email" class="text-[10px] text-slate-400 font-medium truncate">usuário@shift.com</p>
               <h4 
                 id="sidebar-user-name" 
                 onclick="promptEditUserName()" 
                 class="text-xs font-bold text-slate-800 truncate hover:text-purple-700 cursor-pointer flex items-center gap-1" 
                 title="Clique para editar seu nome"
               >
-                <span id="sidebar-user-name-text">Bookflow</span>
+                <span id="sidebar-user-name-text">Usuário</span>
                 <i data-lucide="pencil" class="w-3 h-3 text-slate-400 shrink-0"></i>
               </h4>
             </div>
           </div>
           <button 
             type="button" 
-            onclick="promptEditUserName()" 
-            class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer" 
-            title="Editar nome"
+            onclick="handleLogout()" 
+            class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0" 
+            title="Sair da Conta (Logout)"
           >
-            <i data-lucide="user-cog" class="w-4 h-4"></i>
+            <i data-lucide="log-out" class="w-4 h-4"></i>
           </button>
         </div>
 
@@ -1104,6 +1104,112 @@
   </div>
 
   <!-- ========================================== -->
+  <!-- MODAL DE AUTENTICAÇÃO (LOGIN & CADASTRO) -->
+  <!-- ========================================== -->
+  <div id="modal-auth" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Cabeçalho do Modal com Logo -->
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center font-black text-xl mx-auto mb-3 shadow-md shadow-purple-500/20">
+          S
+        </div>
+        <h3 class="text-xl font-bold text-slate-900 tracking-tight">Shift - Control Life</h3>
+        <p id="auth-subtitle" class="text-xs text-slate-500 mt-1">Acesse sua conta para ver seus dados exclusivos</p>
+      </div>
+
+      <!-- Abas de Alternância (Entrar / Cadastrar) -->
+      <div class="flex p-1 bg-slate-100 rounded-xl mb-6">
+        <button 
+          type="button" 
+          id="tab-auth-login" 
+          onclick="switchAuthMode('login')" 
+          class="flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-slate-900 shadow-2xs cursor-pointer"
+        >
+          Entrar
+        </button>
+        <button 
+          type="button" 
+          id="tab-auth-signup" 
+          onclick="switchAuthMode('signup')" 
+          class="flex-1 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg transition-all cursor-pointer"
+        >
+          Criar Conta
+        </button>
+      </div>
+
+      <!-- Mensagem de Alerta/Erro -->
+      <div id="auth-alert" class="hidden mb-4 p-3 rounded-xl text-xs font-medium border"></div>
+
+      <!-- Formulário -->
+      <form id="form-auth" onsubmit="handleAuthSubmit(event)" class="space-y-3.5">
+        
+        <!-- Campo Nome (visível apenas em cadastro) -->
+        <div id="auth-field-name" class="hidden">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            Seu Nome
+          </label>
+          <input 
+            type="text" 
+            id="auth-input-name" 
+            placeholder="Ex: Maria Silva" 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
+          />
+        </div>
+
+        <!-- Campo E-mail -->
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            E-mail
+          </label>
+          <input 
+            type="email" 
+            id="auth-input-email" 
+            required 
+            placeholder="seu.email@exemplo.com" 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
+          />
+        </div>
+
+        <!-- Campo Senha -->
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            Senha
+          </label>
+          <input 
+            type="password" 
+            id="auth-input-password" 
+            required 
+            placeholder="Mínimo 6 caracteres" 
+            minlength="6"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
+          />
+        </div>
+
+        <!-- Botão de Envio -->
+        <button 
+          type="submit" 
+          id="auth-submit-btn" 
+          class="w-full mt-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <span id="auth-submit-btn-text">Entrar na Minha Conta</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </button>
+
+      </form>
+
+      <!-- Rodapé do Modal -->
+      <div class="mt-5 pt-4 border-t border-slate-100 text-center">
+        <p class="text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          <span>Dados individuais protegidos pelo Supabase</span>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
   <!-- JAVASCRIPT COMPLETO E MODULAR -->
   <!-- ========================================== -->
   <script>
@@ -1205,8 +1311,168 @@
     let draggedEventId = null;
     let productivityChartInstance = null;
 
+    const AUTH_TOKEN_KEY = 'shift_auth_token';
+    const AUTH_USER_KEY = 'shift_auth_user';
+
+    let currentUser = loadSavedAuthUser();
+    let currentAuthMode = 'login';
     let syncDebounceTimer = null;
     let isSyncing = false;
+
+    function loadSavedAuthUser() {
+      try {
+        const saved = localStorage.getItem(AUTH_USER_KEY);
+        return saved ? JSON.parse(saved) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getAuthToken() {
+      return localStorage.getItem(AUTH_TOKEN_KEY);
+    }
+
+    function getAuthHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = getAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return headers;
+    }
+
+    function showAuthModal(mode = 'login') {
+      const modal = document.getElementById('modal-auth');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        switchAuthMode(mode);
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function hideAuthModal() {
+      const modal = document.getElementById('modal-auth');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function switchAuthMode(mode) {
+      currentAuthMode = mode;
+      const tabLogin = document.getElementById('tab-auth-login');
+      const tabSignup = document.getElementById('tab-auth-signup');
+      const fieldName = document.getElementById('auth-field-name');
+      const submitText = document.getElementById('auth-submit-btn-text');
+      const subtitle = document.getElementById('auth-subtitle');
+      const alertEl = document.getElementById('auth-alert');
+
+      if (alertEl) alertEl.classList.add('hidden');
+
+      if (mode === 'signup') {
+        if (tabLogin) tabLogin.className = 'flex-1 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg transition-all cursor-pointer';
+        if (tabSignup) tabSignup.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-slate-900 shadow-2xs cursor-pointer';
+        if (fieldName) fieldName.classList.remove('hidden');
+        if (submitText) submitText.innerText = 'Criar Minha Conta';
+        if (subtitle) subtitle.innerText = 'Cadastre-se para ter seu espaço exclusivo e isolado';
+      } else {
+        if (tabLogin) tabLogin.className = 'flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-slate-900 shadow-2xs cursor-pointer';
+        if (tabSignup) tabSignup.className = 'flex-1 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg transition-all cursor-pointer';
+        if (fieldName) fieldName.classList.add('hidden');
+        if (submitText) submitText.innerText = 'Entrar na Minha Conta';
+        if (subtitle) subtitle.innerText = 'Acesse sua conta para ver seus dados exclusivos';
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function setAuthAlert(msg, type = 'error') {
+      const el = document.getElementById('auth-alert');
+      if (!el) return;
+      if (!msg) {
+        el.classList.add('hidden');
+        return;
+      }
+      el.classList.remove('hidden');
+      if (type === 'error') {
+        el.className = 'mb-4 p-3 rounded-xl text-xs font-medium border bg-rose-50 border-rose-200 text-rose-800 flex items-center gap-2';
+        el.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-600"></i><span>${escapeHtml(msg)}</span>`;
+      } else {
+        el.className = 'mb-4 p-3 rounded-xl text-xs font-medium border bg-emerald-50 border-emerald-200 text-emerald-800 flex items-center gap-2';
+        el.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 shrink-0 text-emerald-600"></i><span>${escapeHtml(msg)}</span>`;
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-input-email').value.trim();
+      const password = document.getElementById('auth-input-password').value;
+      const name = document.getElementById('auth-input-name')?.value?.trim();
+      const btn = document.getElementById('auth-submit-btn');
+      const submitText = document.getElementById('auth-submit-btn-text');
+
+      setAuthAlert(null);
+
+      const origText = submitText ? submitText.innerText : 'Aguarde...';
+      if (submitText) submitText.innerText = 'Processando...';
+      if (btn) btn.disabled = true;
+
+      try {
+        const endpoint = currentAuthMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Falha ao autenticar.');
+        }
+
+        if (currentAuthMode === 'signup' && data.requiresEmailConfirmation) {
+          setAuthAlert('Conta criada! Verifique seu e-mail para confirmar seu cadastro e em seguida faça login.', 'success');
+          setTimeout(() => switchAuthMode('login'), 3000);
+          return;
+        }
+
+        if (data.token) {
+          localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        }
+        if (data.user) {
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+          currentUser = data.user;
+        }
+
+        hideAuthModal();
+        await loadInitialData();
+      } catch (err) {
+        setAuthAlert(err.message || 'Ocorreu um erro ao processar sua solicitação.');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (submitText) submitText.innerText = origText;
+      }
+    }
+
+    async function handleLogout() {
+      if (confirm('Deseja realmente sair da sua conta?')) {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
+        } catch (e) {
+          console.warn('Erro no logout backend:', e);
+        }
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+        currentUser = null;
+        appState = JSON.parse(JSON.stringify(defaultInitialState));
+        appState.userName = 'Usuário';
+        renderAll();
+        showAuthModal('login');
+      }
+    }
 
     async function checkBackendHealth() {
       const dot = document.getElementById('backend-status-dot');
@@ -1239,7 +1505,7 @@
       if (info && info.database && info.database.connected) {
         dot.className = 'w-2 h-2 rounded-full bg-emerald-500 shrink-0';
         text.className = 'text-emerald-700 truncate font-semibold';
-        text.innerText = 'Supabase Conectado';
+        text.innerText = currentUser ? 'Supabase Conectado' : 'Supabase (Deslogado)';
       } else if (info && info.status === 'online') {
         dot.className = 'w-2 h-2 rounded-full bg-amber-500 shrink-0';
         text.className = 'text-amber-700 truncate font-semibold';
@@ -1253,14 +1519,29 @@
     }
 
     async function loadInitialData() {
+      const token = getAuthToken();
+      if (!token) {
+        showAuthModal('login');
+        checkBackendHealth();
+        return;
+      }
+
       try {
-        const res = await fetch('/api/state');
+        const res = await fetch('/api/state', { headers: getAuthHeaders() });
+        if (res.status === 401) {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          currentUser = null;
+          showAuthModal('login');
+          return;
+        }
+
         if (res.ok) {
           const remoteState = await res.json();
           if (remoteState && remoteState.userName) {
             appState = remoteState;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
             renderAll();
+            hideAuthModal();
           }
         }
       } catch (e) {
@@ -1270,17 +1551,20 @@
     }
 
     function syncStateToBackend() {
+      const token = getAuthToken();
+      if (!token) return;
+
       if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
       syncDebounceTimer = setTimeout(async () => {
         try {
           isSyncing = true;
           const res = await fetch('/api/state', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(appState)
           });
-          if (res.ok) {
-            // Sincronização concluída com sucesso
+          if (res.status === 401) {
+            showAuthModal('login');
           }
         } catch (e) {
           console.warn('Erro ao sincronizar com backend:', e);
@@ -1295,7 +1579,7 @@
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (!parsed.userName) parsed.userName = 'Bookflow';
+          if (!parsed.userName) parsed.userName = currentUser?.name || 'Usuário';
           return parsed;
         }
       } catch (e) {
@@ -1315,17 +1599,12 @@
     }
 
     async function resetToDemoData() {
-      if (confirm("Deseja restaurar os dados de demonstração iniciais?")) {
+      if (confirm("Deseja restaurar os dados de demonstração iniciais para a sua conta?")) {
         try {
-          const res = await fetch('/api/reset', { method: 'POST' });
+          const res = await fetch('/api/reset', { method: 'POST', headers: getAuthHeaders() });
           if (res.ok) {
-            const data = await res.json();
-            if (data && data.state) {
-              appState = data.state;
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-              renderAll();
-              return;
-            }
+            await loadInitialData();
+            return;
           }
         } catch (e) {
           console.warn('Falha no reset via API, resetando localmente:', e);
@@ -1352,10 +1631,14 @@
         sidebarDateEl.innerText = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
       }
 
-      // Atualiza nome e avatar do usuário no sidebar
-      const userName = appState.userName || 'Bookflow';
+      // Atualiza nome, email e avatar do usuário no sidebar
+      const userName = appState.userName || currentUser?.name || 'Usuário';
+      const userEmail = appState.userEmail || currentUser?.email || 'Conta Ativa';
       const sidebarUserNameEl = document.getElementById('sidebar-user-name-text');
       if (sidebarUserNameEl) sidebarUserNameEl.innerText = userName;
+
+      const sidebarUserEmailEl = document.getElementById('sidebar-user-email');
+      if (sidebarUserEmailEl) sidebarUserEmailEl.innerText = userEmail;
 
       const sidebarAvatarEl = document.getElementById('sidebar-user-avatar');
       if (sidebarAvatarEl) sidebarAvatarEl.innerText = userName.charAt(0).toUpperCase();
@@ -2833,10 +3116,11 @@
     }
 
     function promptEditUserName() {
-      const current = appState.userName || 'Bookflow';
+      const current = appState.userName || currentUser?.name || 'Usuário';
       const novo = prompt('Como você gostaria de ser chamado?', current);
       if (novo !== null && novo.trim() !== '') {
         appState.userName = novo.trim();
+        if (currentUser) currentUser.name = novo.trim();
         saveState();
       }
     }
@@ -2845,7 +3129,7 @@
       // 1. Nome do Usuário
       const userNameEl = document.getElementById('welcome-user-name-text');
       if (userNameEl) {
-        userNameEl.innerText = appState.userName || 'Bookflow';
+        userNameEl.innerText = appState.userName || currentUser?.name || 'Usuário';
       }
 
       // 2. Data formatada para a saudação
