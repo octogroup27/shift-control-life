@@ -10,9 +10,11 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================================================
--- 1. TABELA: PROFILES (Perfil do Usuário vinculado ao Supabase Auth)
+-- 1. TABELA: PROFILES (Recria para garantir compatibilidade com UUID do Auth)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS public.profiles (
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   user_name TEXT NOT NULL DEFAULT 'Usuário',
   email TEXT,
@@ -20,20 +22,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- Se a tabela profiles já existia com ID TEXT, garante a compatibilidade
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'email') IS FALSE THEN
-    ALTER TABLE public.profiles ADD COLUMN email TEXT;
-  END IF;
-END $$;
-
 -- =============================================================================
 -- 2. TABELA: EVENTS (Agenda com vínculo ao usuário)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.events (
   id TEXT PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   day INTEGER NOT NULL CHECK (day >= 0 AND day <= 6),
   start_hour INTEGER NOT NULL CHECK (start_hour >= 0 AND start_hour <= 23),
@@ -57,7 +51,7 @@ END $$;
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.tasks (
   id TEXT PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
   completed BOOLEAN NOT NULL DEFAULT false,
   category TEXT NOT NULL DEFAULT 'Geral',
@@ -77,7 +71,7 @@ END $$;
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.habits (
   id TEXT PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'Geral',
   days BOOLEAN[] NOT NULL DEFAULT ARRAY[false, false, false, false, false, false, false],
@@ -97,7 +91,7 @@ END $$;
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.goals (
   id TEXT PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'Geral',
   status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
@@ -157,7 +151,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- =============================================================================
--- ROW LEVEL SECURITY (RLS) - ISOLAMENTO ESTRITO POR USUÁRIO
+-- ROW LEVEL SECURITY (RLS) - ISOLAMENTO ESTRITO POR USUÁRIO COM TYPE CAST SEGURO
 -- =============================================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
@@ -166,7 +160,7 @@ ALTER TABLE public.habits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goal_subtasks ENABLE ROW LEVEL SECURITY;
 
--- Remove políticas anteriores permissivas
+-- Remove políticas anteriores
 DROP POLICY IF EXISTS "Permitir acesso total ao profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Permitir acesso total ao events" ON public.events;
 DROP POLICY IF EXISTS "Permitir acesso total ao tasks" ON public.tasks;
@@ -181,43 +175,43 @@ DROP POLICY IF EXISTS "Users can only access own habits" ON public.habits;
 DROP POLICY IF EXISTS "Users can only access own goals" ON public.goals;
 DROP POLICY IF EXISTS "Users can only access own goal_subtasks" ON public.goal_subtasks;
 
--- Políticas de isolamento restritas pelo ID do usuário autenticado (auth.uid())
+-- Políticas com cast explícito (::text) garantindo compatibilidade sem erro de tipos
 CREATE POLICY "Users can only access own profile" ON public.profiles
   FOR ALL TO authenticated
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
+  USING (auth.uid()::text = id::text)
+  WITH CHECK (auth.uid()::text = id::text);
 
 CREATE POLICY "Users can only access own events" ON public.events
   FOR ALL TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid()::text = user_id::text)
+  WITH CHECK (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can only access own tasks" ON public.tasks
   FOR ALL TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid()::text = user_id::text)
+  WITH CHECK (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can only access own habits" ON public.habits
   FOR ALL TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid()::text = user_id::text)
+  WITH CHECK (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can only access own goals" ON public.goals
   FOR ALL TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid()::text = user_id::text)
+  WITH CHECK (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can only access own goal_subtasks" ON public.goal_subtasks
   FOR ALL TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM public.goals g
-      WHERE g.id = goal_subtasks.goal_id AND g.user_id = auth.uid()
+      WHERE g.id = goal_subtasks.goal_id AND g.user_id::text = auth.uid()::text
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.goals g
-      WHERE g.id = goal_subtasks.goal_id AND g.user_id = auth.uid()
+      WHERE g.id = goal_subtasks.goal_id AND g.user_id::text = auth.uid()::text
     )
   );
