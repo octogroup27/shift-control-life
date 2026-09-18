@@ -316,13 +316,24 @@
           </button>
         </div>
 
+        <!-- Botão Abrir Tutorial / Como Usar -->
+        <button 
+          type="button" 
+          onclick="openTutorialModal(1)" 
+          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 rounded-xl border border-sky-200/80 transition-all cursor-pointer shadow-2xs"
+        >
+          <i data-lucide="compass" class="w-3.5 h-3.5 text-sky-600"></i>
+          <span>Como Usar (Tutorial)</span>
+        </button>
+
         <button 
           type="button" 
           onclick="resetToDemoData()" 
-          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl border border-slate-200/60 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
+          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-white rounded-xl border border-slate-200/60 hover:border-rose-200 transition-all cursor-pointer shadow-2xs"
+          title="Zerar todos os dados desta conta"
         >
-          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-          <span>Restaurar Dados</span>
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Zerar Meus Dados</span>
         </button>
       </div>
     </aside>
@@ -1210,6 +1221,161 @@
   </div>
 
   <!-- ========================================== -->
+  <!-- MODAL TUTORIAL / ONBOARDING (BOAS-VINDAS) -->
+  <!-- ========================================== -->
+  <div 
+    id="modal-tutorial" 
+    class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-all duration-300 hidden"
+  >
+    <div class="bg-white rounded-3xl max-w-lg w-full border border-slate-200/80 shadow-2xl p-6 sm:p-7 relative flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Cabeçalho do Tutorial -->
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200/60">
+            Guia Rápido
+          </span>
+          <span id="tutorial-step-counter" class="text-xs text-slate-400 font-medium">Passo 1 de 4</span>
+        </div>
+        <button 
+          type="button" 
+          onclick="skipTutorial()" 
+          class="text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-100"
+          title="Pular tutorial"
+        >
+          Pular
+        </button>
+      </div>
+
+      <!-- Slides do Tutorial -->
+      <div id="tutorial-slides-container" class="min-h-[290px] flex flex-col justify-between">
+        
+        <!-- Slide 1: Visão Geral -->
+        <div id="tutorial-slide-1" class="tutorial-slide space-y-3.5">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md">
+            <i data-lucide="sparkles" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">Bem-vindo ao Shift - Control Life!</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Seu novo centro de comando para organizar tempo, foco e metas pessoais e profissionais com autonomia total.
+          </p>
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs text-slate-700">
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span><strong>Privacidade Total:</strong> Seus dados são salvos exclusivamente para o seu login no Supabase.</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="sparkles" class="w-4 h-4 text-sky-600 shrink-0"></i>
+              <span><strong>Conta Zerada:</strong> Seu espaço inicia limpo para você cadastrar seus próprios horários e hábitos.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 2: Agenda Semanal -->
+        <div id="tutorial-slide-2" class="tutorial-slide space-y-3.5 hidden">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-500 to-cyan-500 text-white flex items-center justify-center shadow-md">
+            <i data-lucide="calendar" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">Agenda Semanal Interativa</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Planejamento visual de horários com agilidade inspirada no Google Calendar.
+          </p>
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs text-slate-700">
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+              <span><strong>Clique na grade</strong> em qualquer horário para agendar um compromisso.</span>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="move" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+              <span><strong>Arraste e solte</strong> para mover compromissos entre dias ou horários diferentes.</span>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="chevrons-up-down" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+              <span><strong>Redimensione:</strong> Puxe a borda inferior do evento para mudar a duração (1h, 1h30, etc).</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 3: Tarefas & Hábitos -->
+        <div id="tutorial-slide-3" class="tutorial-slide space-y-3.5 hidden">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-md">
+            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">Tarefas Diárias & Hábitos</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Construa consistência e monitore suas vitórias diárias e semanais.
+          </p>
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs text-slate-700">
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="list-checks" class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"></i>
+              <span><strong>Tarefas Diárias:</strong> Cadastre suas atividades, filtre por status e dê check ao concluir.</span>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="repeat" class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"></i>
+              <span><strong>Rastreamento de Hábitos:</strong> Marque os dias da semana (Seg a Dom) e veja sua taxa de consistência subir.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 4: Metas Kanban -->
+        <div id="tutorial-slide-4" class="tutorial-slide space-y-3.5 hidden">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 text-white flex items-center justify-center shadow-md">
+            <i data-lucide="target" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">Metas & Kanban com Etapas</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Divida grandes planos em passos simples e acompanhe o avanço em tempo real.
+          </p>
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs text-slate-700">
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="git-pull-request" class="w-4 h-4 text-purple-600 shrink-0 mt-0.5"></i>
+              <span><strong>Etapas e Progresso:</strong> Crie subtarefas na meta e a barra de porcentagem calcula o progresso automaticamente.</span>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-purple-600 shrink-0 mt-0.5"></i>
+              <span><strong>Colunas Kanban:</strong> Arraste cards entre <em>A Fazer</em>, <em>Em Andamento</em> e <em>Concluído</em> no estilo Trello.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Rodapé com Navegação -->
+      <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+        <!-- Indicadores (Dots) -->
+        <div class="flex items-center gap-1.5">
+          <span id="tutorial-dot-1" class="w-2.5 h-2.5 rounded-full bg-slate-900 transition-all"></span>
+          <span id="tutorial-dot-2" class="w-2 h-2 rounded-full bg-slate-200 transition-all"></span>
+          <span id="tutorial-dot-3" class="w-2 h-2 rounded-full bg-slate-200 transition-all"></span>
+          <span id="tutorial-dot-4" class="w-2 h-2 rounded-full bg-slate-200 transition-all"></span>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            id="tutorial-prev-btn" 
+            onclick="prevTutorialStep()" 
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer hidden"
+          >
+            Anterior
+          </button>
+          <button 
+            type="button" 
+            id="tutorial-next-btn" 
+            onclick="nextTutorialStep()" 
+            class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <span id="tutorial-next-text">Próximo</span>
+            <i id="tutorial-next-icon" data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
   <!-- JAVASCRIPT COMPLETO E MODULAR -->
   <!-- ========================================== -->
   <script>
@@ -1249,60 +1415,11 @@
     const CALENDAR_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
     const defaultInitialState = {
-      userName: 'Bookflow',
-      events: [
-        { id: 'ev-1', title: 'Reunião de Alinhamento Semanal', day: 0, startHour: 9, startMinute: 0, duration: 1.5, color: 'blue', category: 'Trabalho' },
-        { id: 'ev-2', title: 'Treino Funcional & Cardio', day: 1, startHour: 7, startMinute: 30, duration: 1, color: 'green', category: 'Saúde' },
-        { id: 'ev-3', title: 'Bloco de Foco: Estudo & Leitura', day: 2, startHour: 14, startMinute: 0, duration: 2, color: 'purple', category: 'Reunião' },
-        { id: 'ev-4', title: 'Planejamento Pessoal & Finanças', day: 3, startHour: 18, startMinute: 0, duration: 1, color: 'pink', category: 'Pessoal' },
-        { id: 'ev-5', title: 'Revisão de Metas & Portfólio', day: 4, startHour: 16, startMinute: 0, duration: 1.5, color: 'orange', category: 'Foco' },
-        { id: 'ev-6', title: 'Almoço em Família', day: 5, startHour: 12, startMinute: 0, duration: 2, color: 'red', category: 'Urgente' }
-      ],
-      tasks: [
-        { id: 't-1', text: 'Revisar cronograma da semana na Agenda', completed: true, category: 'Trabalho' },
-        { id: 't-2', text: 'Ler 20 páginas de design e desenvolvimento', completed: false, category: 'Estudos' },
-        { id: 't-3', text: 'Caminhada de 30 minutos ao ar livre', completed: false, category: 'Saúde' }
-      ],
-      habits: [
-        { id: 'h-1', name: 'Beber 2L de água', category: 'Saúde', days: [true, true, true, false, false, false, false] },
-        { id: 'h-2', name: 'Leitura diária (15 min)', category: 'Estudos', days: [true, true, false, false, false, false, false] },
-        { id: 'h-3', name: 'Exercício ou alongamento', category: 'Saúde', days: [false, true, true, false, false, false, false] },
-        { id: 'h-4', name: 'Meditação matinal', category: 'Rotina', days: [true, false, false, false, false, false, false] }
-      ],
-      goals: [
-        {
-          id: 'g-1',
-          title: 'Lançar Novo Portfólio Pessoal',
-          category: 'Profissional',
-          status: 'in_progress',
-          subtasks: [
-            { id: 'st-1', text: 'Estruturar seções e wireframe', completed: true },
-            { id: 'st-2', text: 'Configurar domínio e deploy rápido', completed: true },
-            { id: 'st-3', text: 'Revisar responsividade mobile', completed: false }
-          ]
-        },
-        {
-          id: 'g-2',
-          title: 'Rotina de Saúde & Corrida 5km',
-          category: 'Saúde',
-          status: 'todo',
-          subtasks: [
-            { id: 'st-4', text: 'Comprar tênis de corrida adequado', completed: false },
-            { id: 'st-5', text: 'Treinar 3x na semana (intervalado)', completed: false },
-            { id: 'st-6', text: 'Completar prova de 5km', completed: false }
-          ]
-        },
-        {
-          id: 'g-3',
-          title: 'Especialização em UI/UX & Produtividade',
-          category: 'Estudos',
-          status: 'done',
-          subtasks: [
-            { id: 'st-7', text: 'Módulos de micro-interações', completed: true },
-            { id: 'st-8', text: 'Projeto prático final', completed: true }
-          ]
-        }
-      ]
+      userName: 'Usuário',
+      events: [],
+      tasks: [],
+      habits: [],
+      goals: []
     };
 
     let currentScreen = 'home';
@@ -1404,6 +1521,122 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    /* ================================================================= */
+    /* TUTORIAL / ONBOARDING (BOAS-VINDAS NO 1º LOGIN) */
+    /* ================================================================= */
+    let currentTutorialStep = 1;
+    const TOTAL_TUTORIAL_STEPS = 4;
+
+    function checkAndTriggerOnboardingTutorial() {
+      if (!currentUser || !currentUser.id) return;
+      const key = 'shift_tutorial_seen_' + currentUser.id;
+      const seen = localStorage.getItem(key);
+      if (!seen) {
+        setTimeout(() => {
+          openTutorialModal(1);
+        }, 500);
+      }
+    }
+
+    function openTutorialModal(step = 1) {
+      const modal = document.getElementById('modal-tutorial');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTutorialStep(step);
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeTutorialModal() {
+      const modal = document.getElementById('modal-tutorial');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function markTutorialAsSeen() {
+      if (currentUser && currentUser.id) {
+        localStorage.setItem('shift_tutorial_seen_' + currentUser.id, 'true');
+      }
+    }
+
+    function skipTutorial() {
+      markTutorialAsSeen();
+      closeTutorialModal();
+    }
+
+    function setTutorialStep(step) {
+      if (step < 1) step = 1;
+      if (step > TOTAL_TUTORIAL_STEPS) step = TOTAL_TUTORIAL_STEPS;
+      currentTutorialStep = step;
+
+      // Exibe apenas o slide correspondente
+      for (let i = 1; i <= TOTAL_TUTORIAL_STEPS; i++) {
+        const slide = document.getElementById(`tutorial-slide-${i}`);
+        const dot = document.getElementById(`tutorial-dot-${i}`);
+        if (slide) {
+          if (i === step) slide.classList.remove('hidden');
+          else slide.classList.add('hidden');
+        }
+        if (dot) {
+          if (i === step) {
+            dot.className = 'w-6 h-2.5 rounded-full bg-slate-900 transition-all';
+          } else {
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-200 transition-all';
+          }
+        }
+      }
+
+      // Atualiza texto do passo
+      const counter = document.getElementById('tutorial-step-counter');
+      if (counter) counter.innerText = `Passo ${step} de ${TOTAL_TUTORIAL_STEPS}`;
+
+      // Botão Anterior
+      const prevBtn = document.getElementById('tutorial-prev-btn');
+      if (prevBtn) {
+        if (step === 1) prevBtn.classList.add('hidden');
+        else prevBtn.classList.remove('hidden');
+      }
+
+      // Botão Próximo / Começar
+      const nextBtn = document.getElementById('tutorial-next-btn');
+      const nextText = document.getElementById('tutorial-next-text');
+      const nextIcon = document.getElementById('tutorial-next-icon');
+
+      if (step === TOTAL_TUTORIAL_STEPS) {
+        if (nextText) nextText.innerText = 'Começar a Usar';
+        if (nextIcon) nextIcon.setAttribute('data-lucide', 'sparkles');
+        if (nextBtn) {
+          nextBtn.className = 'px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer';
+        }
+      } else {
+        if (nextText) nextText.innerText = 'Próximo';
+        if (nextIcon) nextIcon.setAttribute('data-lucide', 'arrow-right');
+        if (nextBtn) {
+          nextBtn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer';
+        }
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function nextTutorialStep() {
+      if (currentTutorialStep < TOTAL_TUTORIAL_STEPS) {
+        setTutorialStep(currentTutorialStep + 1);
+      } else {
+        markTutorialAsSeen();
+        closeTutorialModal();
+      }
+    }
+
+    function prevTutorialStep() {
+      if (currentTutorialStep > 1) {
+        setTutorialStep(currentTutorialStep - 1);
+      }
+    }
+
     async function handleAuthSubmit(e) {
       e.preventDefault();
       const email = document.getElementById('auth-input-email').value.trim();
@@ -1448,6 +1681,7 @@
 
         hideAuthModal();
         await loadInitialData();
+        checkAndTriggerOnboardingTutorial();
       } catch (err) {
         setAuthAlert(err.message || 'Ocorreu um erro ao processar sua solicitação.');
       } finally {
@@ -1469,6 +1703,7 @@
         currentUser = null;
         appState = JSON.parse(JSON.stringify(defaultInitialState));
         appState.userName = 'Usuário';
+        closeTutorialModal();
         renderAll();
         showAuthModal('login');
       }
@@ -1542,6 +1777,7 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
             renderAll();
             hideAuthModal();
+            checkAndTriggerOnboardingTutorial();
           }
         }
       } catch (e) {
@@ -1599,7 +1835,7 @@
     }
 
     async function resetToDemoData() {
-      if (confirm("Deseja restaurar os dados de demonstração iniciais para a sua conta?")) {
+      if (confirm("Tem certeza que deseja zerar todos os seus dados da sua conta?")) {
         try {
           const res = await fetch('/api/reset', { method: 'POST', headers: getAuthHeaders() });
           if (res.ok) {

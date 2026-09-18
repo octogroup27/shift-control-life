@@ -164,9 +164,6 @@ authRouter.post('/signup', async (req: Request, res: Response): Promise<void> =>
           user_name: userName,
           email: createdUser.email,
         });
-
-        // Inicializa dados padrão para este usuário novo
-        await seedUserInitialData(createdUser.id, scopedClient);
       }
 
       res.status(201).json({
@@ -251,16 +248,6 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
             user_name: userName,
             email: user.email,
           });
-
-          // Se a conta for nova e ainda não tiver eventos, pré-carrega os dados iniciais
-          const { count } = await scopedClient
-            .from('events')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id);
-
-          if (!count || count === 0) {
-            await seedUserInitialData(user.id, scopedClient);
-          }
         } catch (e) {
           console.warn('Aviso ao sincronizar perfil pós-login:', e);
         }

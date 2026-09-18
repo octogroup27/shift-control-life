@@ -262,7 +262,7 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
   }
 });
 
-// POST /api/reset - Restaura dados padrão exclusivamente para o usuário autenticado
+// POST /api/reset - Limpa e zera os dados da conta do usuário autenticado
 stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
@@ -273,67 +273,19 @@ stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: R
       await client.from('habits').delete().eq('user_id', userId);
       await client.from('tasks').delete().eq('user_id', userId);
       await client.from('events').delete().eq('user_id', userId);
-
-      // Reinsere dados de demonstração vinculados a este usuário
-      const events = initialDefaultState.events.map(e => ({
-        id: `ev-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
-        user_id: userId,
-        title: e.title,
-        day: e.day,
-        start_hour: e.startHour,
-        start_minute: e.startMinute,
-        duration: e.duration,
-        color: e.color,
-        category: e.category,
-      }));
-      await client.from('events').insert(events);
-
-      const tasks = initialDefaultState.tasks.map(t => ({
-        id: `t-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
-        user_id: userId,
-        text: t.text,
-        completed: t.completed,
-        category: t.category,
-      }));
-      await client.from('tasks').insert(tasks);
-
-      const habits = initialDefaultState.habits.map(h => ({
-        id: `h-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
-        user_id: userId,
-        name: h.name,
-        category: h.category,
-        days: h.days,
-      }));
-      await client.from('habits').insert(habits);
-
-      for (const g of initialDefaultState.goals) {
-        const goalId = `g-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`;
-        await client.from('goals').insert({
-          id: goalId,
-          user_id: userId,
-          title: g.title,
-          category: g.category,
-          status: g.status,
-        });
-
-        if (g.subtasks && g.subtasks.length > 0) {
-          const subtasks = g.subtasks.map(st => ({
-            id: `st-${Math.random().toString(36).substring(2, 8)}`,
-            goal_id: goalId,
-            text: st.text,
-            completed: st.completed,
-          }));
-          await client.from('goal_subtasks').insert(subtasks);
-        }
-      }
+    } else {
+      localStore.events = [];
+      localStore.tasks = [];
+      localStore.habits = [];
+      localStore.goals = [];
     }
 
     res.json({
       success: true,
-      message: 'Dados restaurados com sucesso para a sua conta',
+      message: 'Seus dados foram zerados com sucesso',
     });
   } catch (err) {
     console.error('Falha ao processar POST /api/reset:', err);
-    res.status(500).json({ error: 'Erro ao restaurar dados padrão' });
+    res.status(500).json({ error: 'Erro ao zerar dados' });
   }
 });
