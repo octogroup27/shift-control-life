@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { supabase, isSupabaseConfigured, initialDefaultState } from '../supabase.js';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase, supabaseAdmin, getScopedSupabase, isSupabaseConfigured, initialDefaultState } from '../supabase.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
 // Função auxiliar para inicializar dados padrão para um novo usuário
-async function seedUserInitialData(userId: string) {
-  if (!supabase) return;
+async function seedUserInitialData(userId: string, client: SupabaseClient) {
   try {
     // Insere eventos padrão
     const events = initialDefaultState.events.map(e => ({
@@ -20,7 +20,7 @@ async function seedUserInitialData(userId: string) {
       color: e.color,
       category: e.category,
     }));
-    await supabase.from('events').insert(events);
+    await client.from('events').insert(events);
 
     // Insere tarefas padrão
     const tasks = initialDefaultState.tasks.map(t => ({
@@ -30,7 +30,7 @@ async function seedUserInitialData(userId: string) {
       completed: t.completed,
       category: t.category,
     }));
-    await supabase.from('tasks').insert(tasks);
+    await client.from('tasks').insert(tasks);
 
     // Insere hábitos padrão
     const habits = initialDefaultState.habits.map(h => ({
@@ -40,12 +40,12 @@ async function seedUserInitialData(userId: string) {
       category: h.category,
       days: h.days,
     }));
-    await supabase.from('habits').insert(habits);
+    await client.from('habits').insert(habits);
 
     // Insere metas e subtarefas padrão
     for (const g of initialDefaultState.goals) {
       const goalId = `g-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`;
-      await supabase.from('goals').insert({
+      await client.from('goals').insert({
         id: goalId,
         user_id: userId,
         title: g.title,
@@ -60,7 +60,7 @@ async function seedUserInitialData(userId: string) {
           text: st.text,
           completed: st.completed,
         }));
-        await supabase.from('goal_subtasks').insert(subtasks);
+        await client.from('goal_subtasks').insert(subtasks);
       }
     }
     console.log(`✨ Dados de demonstração inicializados com sucesso para o usuário: ${userId}`);
@@ -84,49 +84,100 @@ authRouter.post('/signup', async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const userName = name && typeof name === 'string' ? name.trim() : email.split('@')[0];
+    const cleanEmail = email.trim().toLowerCase();
+    const userName = name && typeof name === 'string' && name.trim() ? name.trim() : cleanEmail.split('@')[0];
 
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          data: {
+      let createdUser: any = null;
+      let userSession: any = null;
+
+      // Se houver service_role key configurada, criamos via admin (auto-confirmação, sem rate limit de e-mail)
+      if (supabaseAdmin) {
+        const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.createUser({
+          email: cleanEmail,
+          password,
+          email_confirm: true,
+          user_metadata: {
             user_name: userName,
             full_name: userName,
           },
-        },
-      });
+        });
 
-      if (error) {
-        res.status(400).json({ error: error.message });
-        return;
+        if (adminErr) {
+          if (adminErr.message.includes('already registered') || adminErr.message.includes('unique constraint')) {
+            res.status(400).json({ error: 'Este e-mail já está cadastrado. Faça login ou utilize outro e-mail.' });
+            return;
+          }
+          res.status(400).json({ error: adminErr.message });
+          return;
+        }
+
+        createdUser = adminData.user;
+
+        // Login imediato para obter a sessão JWT
+        const { data: loginData } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+        userSession = loginData?.session || null;
+      } else {
+        // Fluxo padrão com a anon key
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              user_name: userName,
+              full_name: userName,
+            },
+          },
+        });
+
+        if (error) {
+          if (error.message.includes('rate limit') || error.status === 429) {
+            res.status(429).json({
+              error: 'Limite de envio de e-mails do Supabase atingido. Para resolver, desative a opção "Confirm email" no painel do Supabase (Authentication > Providers > Email) ou configure a chave SUPABASE_SERVICE_ROLE_KEY.',
+            });
+            return;
+          }
+          res.status(400).json({ error: error.message });
+          return;
+        }
+
+        // Se o usuário já existia previamente, o Supabase retorna identities vazio
+        if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+          res.status(400).json({ error: 'Este e-mail já está cadastrado. Por favor, faça login.' });
+          return;
+        }
+
+        createdUser = data.user;
+        userSession = data.session;
       }
 
-      const user = data.user;
-      const session = data.session;
+      if (createdUser) {
+        // Obtém cliente com credencial autenticada do usuário ou admin para contornar bloqueio de RLS
+        const scopedClient = getScopedSupabase(userSession?.access_token) || supabase;
 
-      if (user) {
-        // Inicializa perfil
-        await supabase.from('profiles').upsert({
-          id: user.id,
+        // Salva perfil no Supabase
+        await scopedClient.from('profiles').upsert({
+          id: createdUser.id,
           user_name: userName,
-          email: user.email,
+          email: createdUser.email,
         });
 
         // Inicializa dados padrão para este usuário novo
-        await seedUserInitialData(user.id);
+        await seedUserInitialData(createdUser.id, scopedClient);
       }
 
       res.status(201).json({
         user: {
-          id: user?.id,
-          email: user?.email,
+          id: createdUser?.id,
+          email: createdUser?.email,
           name: userName,
         },
-        token: session?.access_token || null,
-        session,
-        requiresEmailConfirmation: !session,
+        token: userSession?.access_token || null,
+        session: userSession,
+        requiresEmailConfirmation: !userSession,
       });
       return;
     }
@@ -135,7 +186,7 @@ authRouter.post('/signup', async (req: Request, res: Response): Promise<void> =>
     res.status(201).json({
       user: {
         id: 'local-user-' + Date.now(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         name: userName,
       },
       token: 'local-token-demo',
@@ -156,28 +207,64 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
       });
 
       if (error) {
-        res.status(401).json({ error: 'E-mail ou senha incorretos.' });
+        let message = 'E-mail ou senha incorretos.';
+        if (error.message.includes('Email not confirmed')) {
+          message = 'E-mail ainda não confirmado no Supabase. Desative a opção "Confirm email" no painel do Supabase (Authentication > Providers > Email) para permitir login imediato.';
+        } else if (error.message.includes('Invalid login credentials')) {
+          message = 'E-mail ou senha incorretos. Verifique seus dados ou crie uma conta.';
+        } else {
+          message = error.message;
+        }
+        res.status(401).json({ error: message });
         return;
       }
 
       const user = data.user;
       const session = data.session;
 
+      // Usa o cliente autenticado com a sessão do usuário recém-logado
+      const scopedClient = getScopedSupabase(session.access_token) || supabase;
+
       // Obtém o nome no perfil se existir
-      const { data: profile } = await supabase
+      const { data: profile } = await scopedClient
         .from('profiles')
         .select('user_name')
         .eq('id', user.id)
         .single();
 
-      const userName = profile?.user_name || user.user_metadata?.user_name || user.email?.split('@')[0] || 'Usuário';
+      let userName = profile?.user_name || user.user_metadata?.user_name || user.user_metadata?.full_name || cleanEmail.split('@')[0];
+
+      // Auto-reparo se o perfil ainda não existir na tabela profiles do Supabase
+      if (!profile) {
+        try {
+          await scopedClient.from('profiles').upsert({
+            id: user.id,
+            user_name: userName,
+            email: user.email,
+          });
+
+          // Se a conta for nova e ainda não tiver eventos, pré-carrega os dados iniciais
+          const { count } = await scopedClient
+            .from('events')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+
+          if (!count || count === 0) {
+            await seedUserInitialData(user.id, scopedClient);
+          }
+        } catch (e) {
+          console.warn('Aviso ao sincronizar perfil pós-login:', e);
+        }
+      }
 
       res.json({
         user: {
@@ -195,7 +282,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     res.json({
       user: {
         id: 'local-user-demo',
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         name: 'Bookflow Demo',
       },
       token: 'local-token-demo',
@@ -213,15 +300,18 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
     let userName = req.userName;
     const email = req.userEmail;
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('user_name, email')
-        .eq('id', userId)
-        .single();
+    if (isSupabaseConfigured() && userId) {
+      const scopedClient = getScopedSupabase(req) || supabase;
+      if (scopedClient) {
+        const { data: profile } = await scopedClient
+          .from('profiles')
+          .select('user_name, email')
+          .eq('id', userId)
+          .single();
 
-      if (profile?.user_name) {
-        userName = profile.user_name;
+        if (profile?.user_name) {
+          userName = profile.user_name;
+        }
       }
     }
 
@@ -239,10 +329,13 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
 });
 
 // POST /api/auth/logout - Logout do usuário
-authRouter.post('/logout', async (_req: Request, res: Response): Promise<void> => {
+authRouter.post('/logout', async (req: Request, res: Response): Promise<void> => {
   try {
-    if (isSupabaseConfigured() && supabase) {
-      await supabase.auth.signOut();
+    if (isSupabaseConfigured()) {
+      const client = getScopedSupabase(req) || supabase;
+      if (client) {
+        await client.auth.signOut();
+      }
     }
     res.json({ success: true, message: 'Logout realizado com sucesso.' });
   } catch (err) {
@@ -250,3 +343,4 @@ authRouter.post('/logout', async (_req: Request, res: Response): Promise<void> =
     res.json({ success: true });
   }
 });
+

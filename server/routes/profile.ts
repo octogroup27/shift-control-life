@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const profileRouter = Router();
@@ -10,8 +10,10 @@ profileRouter.use(requireAuth);
 profileRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data, error } = await supabase
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
+      const { data, error } = await client
         .from('profiles')
         .select('user_name, email')
         .eq('id', userId)
@@ -36,7 +38,9 @@ profileRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise
 profileRouter.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { userName } = req.body;
+
     if (!userName || typeof userName !== 'string') {
       res.status(400).json({ error: 'userName é obrigatório e deve ser uma string' });
       return;
@@ -44,8 +48,8 @@ profileRouter.put('/', async (req: AuthenticatedRequest, res: Response): Promise
 
     localStore.userName = userName.trim();
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client
         .from('profiles')
         .upsert({
           id: userId,
@@ -66,3 +70,4 @@ profileRouter.put('/', async (req: AuthenticatedRequest, res: Response): Promise
     res.status(500).json({ error: 'Erro interno ao atualizar perfil' });
   }
 });
+

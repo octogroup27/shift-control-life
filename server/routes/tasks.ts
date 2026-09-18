@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { TaskItem } from '../types.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -23,8 +23,10 @@ function mapDbToTask(row: any): TaskItem {
 tasksRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data, error } = await supabase
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
+      const { data, error } = await client
         .from('tasks')
         .select('*')
         .eq('user_id', userId)
@@ -48,6 +50,7 @@ tasksRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<v
 tasksRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id, text, completed, category } = req.body;
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'text é obrigatório' });
@@ -64,8 +67,8 @@ tasksRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<
 
     localStore.tasks.unshift(newTask);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase.from('tasks').insert({
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client.from('tasks').insert({
         id: newTask.id,
         user_id: userId,
         text: newTask.text,
@@ -91,6 +94,7 @@ tasksRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<
 tasksRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     const { completed, text, category } = req.body;
 
@@ -101,7 +105,7 @@ tasksRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
       if (category !== undefined) task.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase && userId) {
+    if (isSupabaseConfigured() && client && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -109,7 +113,7 @@ tasksRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
       if (text !== undefined) dbUpdates.text = text;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase
+      const { error } = await client
         .from('tasks')
         .update(dbUpdates)
         .eq('id', id)
@@ -133,11 +137,12 @@ tasksRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
 tasksRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     localStore.tasks = localStore.tasks.filter(t => t.id !== id);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client
         .from('tasks')
         .delete()
         .eq('id', id)
@@ -156,3 +161,4 @@ tasksRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pro
     res.status(500).json({ error: 'Erro interno ao excluir tarefa' });
   }
 });
+

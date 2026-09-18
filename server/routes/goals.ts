@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { GoalItem, GoalSubtask } from '../types.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -11,8 +11,10 @@ goalsRouter.use(requireAuth);
 goalsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data, error } = await supabase
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
+      const { data, error } = await client
         .from('goals')
         .select(`
           id,
@@ -65,6 +67,7 @@ goalsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<v
 goalsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id, title, category, status, subtasks } = req.body;
     if (!title || typeof title !== 'string') {
       res.status(400).json({ error: 'title é obrigatório' });
@@ -91,8 +94,8 @@ goalsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<
 
     localStore.goals.push(newGoal);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error: goalError } = await supabase.from('goals').insert({
+    if (isSupabaseConfigured() && client && userId) {
+      const { error: goalError } = await client.from('goals').insert({
         id: newGoal.id,
         user_id: userId,
         title: newGoal.title,
@@ -113,7 +116,7 @@ goalsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<
           text: st.text,
           completed: st.completed,
         }));
-        const { error: stError } = await supabase.from('goal_subtasks').insert(subtaskRows);
+        const { error: stError } = await client.from('goal_subtasks').insert(subtaskRows);
         if (stError) {
           console.error('Erro ao criar subtarefas no Supabase:', stError);
         }
@@ -131,6 +134,7 @@ goalsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<
 goalsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     const { status, title, category } = req.body;
 
@@ -141,7 +145,7 @@ goalsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
       if (category !== undefined) goal.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase && userId) {
+    if (isSupabaseConfigured() && client && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -149,7 +153,7 @@ goalsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
       if (title !== undefined) dbUpdates.title = title;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase
+      const { error } = await client
         .from('goals')
         .update(dbUpdates)
         .eq('id', id)
@@ -173,11 +177,12 @@ goalsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Prom
 goalsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     localStore.goals = localStore.goals.filter(g => g.id !== id);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client
         .from('goals')
         .delete()
         .eq('id', id)
@@ -200,6 +205,7 @@ goalsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 // POST /api/goals/:id/subtasks
 goalsRouter.post('/:id/subtasks', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const client = getScopedSupabase(req) || supabase;
     const { id: goalId } = req.params;
     const { text, completed } = req.body;
 
@@ -221,8 +227,8 @@ goalsRouter.post('/:id/subtasks', async (req: AuthenticatedRequest, res: Respons
       goal.subtasks.push(newSubtask);
     }
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('goal_subtasks').insert({
+    if (isSupabaseConfigured() && client) {
+      const { error } = await client.from('goal_subtasks').insert({
         id: newSubtask.id,
         goal_id: goalId,
         text: newSubtask.text,
@@ -246,6 +252,7 @@ goalsRouter.post('/:id/subtasks', async (req: AuthenticatedRequest, res: Respons
 // PATCH /api/goals/:id/subtasks/:subtaskId
 goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const client = getScopedSupabase(req) || supabase;
     const { id: goalId, subtaskId } = req.params;
     const { completed, text } = req.body;
 
@@ -256,12 +263,12 @@ goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, 
       if (text !== undefined) subtask.text = text;
     }
 
-    if (isSupabaseConfigured() && supabase) {
+    if (isSupabaseConfigured() && client) {
       const dbUpdates: Record<string, any> = {};
       if (completed !== undefined) dbUpdates.completed = Boolean(completed);
       if (text !== undefined) dbUpdates.text = text;
 
-      const { error } = await supabase
+      const { error } = await client
         .from('goal_subtasks')
         .update(dbUpdates)
         .eq('id', subtaskId)
@@ -284,6 +291,7 @@ goalsRouter.patch('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, 
 // DELETE /api/goals/:id/subtasks/:subtaskId
 goalsRouter.delete('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const client = getScopedSupabase(req) || supabase;
     const { id: goalId, subtaskId } = req.params;
 
     const goal = localStore.goals.find(g => g.id === goalId);
@@ -291,8 +299,8 @@ goalsRouter.delete('/:id/subtasks/:subtaskId', async (req: AuthenticatedRequest,
       goal.subtasks = goal.subtasks.filter(st => st.id !== subtaskId);
     }
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client) {
+      const { error } = await client
         .from('goal_subtasks')
         .delete()
         .eq('id', subtaskId)

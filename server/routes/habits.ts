@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { HabitItem } from '../types.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -23,8 +23,10 @@ function mapDbToHabit(row: any): HabitItem {
 habitsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data, error } = await supabase
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
+      const { data, error } = await client
         .from('habits')
         .select('*')
         .eq('user_id', userId)
@@ -48,6 +50,7 @@ habitsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
 habitsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id, name, category, days } = req.body;
     if (!name || typeof name !== 'string') {
       res.status(400).json({ error: 'name é obrigatório' });
@@ -64,8 +67,8 @@ habitsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise
 
     localStore.habits.push(newHabit);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase.from('habits').insert({
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client.from('habits').insert({
         id: newHabit.id,
         user_id: userId,
         name: newHabit.name,
@@ -91,6 +94,7 @@ habitsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise
 habitsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     const { days, name, category } = req.body;
 
@@ -101,7 +105,7 @@ habitsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
       if (category !== undefined) habit.category = category;
     }
 
-    if (isSupabaseConfigured() && supabase && userId) {
+    if (isSupabaseConfigured() && client && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -109,7 +113,7 @@ habitsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
       if (name !== undefined) dbUpdates.name = name;
       if (category !== undefined) dbUpdates.category = category;
 
-      const { error } = await supabase
+      const { error } = await client
         .from('habits')
         .update(dbUpdates)
         .eq('id', id)
@@ -133,11 +137,12 @@ habitsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 habitsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     localStore.habits = localStore.habits.filter(h => h.id !== id);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client
         .from('habits')
         .delete()
         .eq('id', id)
@@ -156,3 +161,4 @@ habitsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pr
     res.status(500).json({ error: 'Erro interno ao excluir hábito' });
   }
 });
+

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore } from '../supabase.js';
 import { EventItem } from '../types.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -27,8 +27,10 @@ function mapDbToEvent(row: any): EventItem {
 eventsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { data, error } = await supabase
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
+      const { data, error } = await client
         .from('events')
         .select('*')
         .eq('user_id', userId)
@@ -53,6 +55,7 @@ eventsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
 eventsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const body = req.body as Partial<EventItem>;
     if (!body.title || body.day === undefined || body.startHour === undefined) {
       res.status(400).json({ error: 'title, day e startHour são campos obrigatórios' });
@@ -73,8 +76,8 @@ eventsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise
 
     localStore.events.push(newEvent);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase.from('events').insert({
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client.from('events').insert({
         id: newEvent.id,
         user_id: userId,
         title: newEvent.title,
@@ -104,6 +107,7 @@ eventsRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise
 eventsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     const updates = req.body as Partial<EventItem>;
 
@@ -116,7 +120,7 @@ eventsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       };
     }
 
-    if (isSupabaseConfigured() && supabase && userId) {
+    if (isSupabaseConfigured() && client && userId) {
       const dbUpdates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -129,7 +133,7 @@ eventsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       if (updates.color !== undefined) dbUpdates.color = updates.color;
       if (updates.category !== undefined) dbUpdates.category = updates.category;
 
-      const { error } = await supabase
+      const { error } = await client
         .from('events')
         .update(dbUpdates)
         .eq('id', id)
@@ -154,11 +158,12 @@ eventsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response): Promi
 eventsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { id } = req.params;
     localStore.events = localStore.events.filter(e => e.id !== id);
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      const { error } = await supabase
+    if (isSupabaseConfigured() && client && userId) {
+      const { error } = await client
         .from('events')
         .delete()
         .eq('id', id)

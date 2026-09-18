@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase, isSupabaseConfigured, localStore, initialDefaultState } from '../supabase.js';
+import { supabase, getScopedSupabase, isSupabaseConfigured, localStore, initialDefaultState } from '../supabase.js';
 import { EventItem, GoalItem, HabitItem, TaskItem } from '../types.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -43,16 +43,18 @@ stateRouter.get('/health', async (_req: Request, res: Response): Promise<void> =
 stateRouter.get('/state', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
-    if (isSupabaseConfigured() && supabase && userId) {
+    const client = getScopedSupabase(req) || supabase;
+
+    if (isSupabaseConfigured() && client && userId) {
       // 1. Busca perfil do usuário
-      const { data: profileData } = await supabase
+      const { data: profileData } = await client
         .from('profiles')
         .select('user_name, email')
         .eq('id', userId)
         .single();
 
       // 2. Busca eventos do usuário
-      const { data: eventsData } = await supabase
+      const { data: eventsData } = await client
         .from('events')
         .select('*')
         .eq('user_id', userId)
@@ -60,21 +62,21 @@ stateRouter.get('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
         .order('start_hour', { ascending: true });
 
       // 3. Busca tarefas do usuário
-      const { data: tasksData } = await supabase
+      const { data: tasksData } = await client
         .from('tasks')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       // 4. Busca hábitos do usuário
-      const { data: habitsData } = await supabase
+      const { data: habitsData } = await client
         .from('habits')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
       // 5. Busca metas do usuário com subtarefas
-      const { data: goalsData } = await supabase
+      const { data: goalsData } = await client
         .from('goals')
         .select(`
           id,
@@ -165,11 +167,12 @@ stateRouter.get('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
 stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
     const { userName, events, tasks, habits, goals } = req.body;
 
-    if (isSupabaseConfigured() && supabase && userId) {
+    if (isSupabaseConfigured() && client && userId) {
       if (userName) {
-        await supabase.from('profiles').upsert({
+        await client.from('profiles').upsert({
           id: userId,
           user_name: userName,
           updated_at: new Date().toISOString(),
@@ -177,7 +180,7 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
       }
 
       if (Array.isArray(events)) {
-        await supabase.from('events').delete().eq('user_id', userId);
+        await client.from('events').delete().eq('user_id', userId);
         if (events.length > 0) {
           const rows = events.map(e => ({
             id: e.id,
@@ -190,12 +193,12 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
             color: e.color,
             category: e.category,
           }));
-          await supabase.from('events').insert(rows);
+          await client.from('events').insert(rows);
         }
       }
 
       if (Array.isArray(tasks)) {
-        await supabase.from('tasks').delete().eq('user_id', userId);
+        await client.from('tasks').delete().eq('user_id', userId);
         if (tasks.length > 0) {
           const rows = tasks.map(t => ({
             id: t.id,
@@ -204,12 +207,12 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
             completed: t.completed,
             category: t.category,
           }));
-          await supabase.from('tasks').insert(rows);
+          await client.from('tasks').insert(rows);
         }
       }
 
       if (Array.isArray(habits)) {
-        await supabase.from('habits').delete().eq('user_id', userId);
+        await client.from('habits').delete().eq('user_id', userId);
         if (habits.length > 0) {
           const rows = habits.map(h => ({
             id: h.id,
@@ -218,15 +221,15 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
             category: h.category,
             days: h.days,
           }));
-          await supabase.from('habits').insert(rows);
+          await client.from('habits').insert(rows);
         }
       }
 
       if (Array.isArray(goals)) {
         // Exclui metas anteriores deste usuário (subtarefas são excluídas em cascata)
-        await supabase.from('goals').delete().eq('user_id', userId);
+        await client.from('goals').delete().eq('user_id', userId);
         for (const g of goals) {
-          await supabase.from('goals').insert({
+          await client.from('goals').insert({
             id: g.id,
             user_id: userId,
             title: g.title,
@@ -240,7 +243,7 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
               text: st.text,
               completed: st.completed,
             }));
-            await supabase.from('goal_subtasks').insert(subtaskRows);
+            await client.from('goal_subtasks').insert(subtaskRows);
           }
         }
       }
@@ -263,12 +266,13 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
 stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
+    const client = getScopedSupabase(req) || supabase;
 
-    if (isSupabaseConfigured() && supabase && userId) {
-      await supabase.from('goals').delete().eq('user_id', userId);
-      await supabase.from('habits').delete().eq('user_id', userId);
-      await supabase.from('tasks').delete().eq('user_id', userId);
-      await supabase.from('events').delete().eq('user_id', userId);
+    if (isSupabaseConfigured() && client && userId) {
+      await client.from('goals').delete().eq('user_id', userId);
+      await client.from('habits').delete().eq('user_id', userId);
+      await client.from('tasks').delete().eq('user_id', userId);
+      await client.from('events').delete().eq('user_id', userId);
 
       // Reinsere dados de demonstração vinculados a este usuário
       const events = initialDefaultState.events.map(e => ({
@@ -282,7 +286,7 @@ stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: R
         color: e.color,
         category: e.category,
       }));
-      await supabase.from('events').insert(events);
+      await client.from('events').insert(events);
 
       const tasks = initialDefaultState.tasks.map(t => ({
         id: `t-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
@@ -291,7 +295,7 @@ stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: R
         completed: t.completed,
         category: t.category,
       }));
-      await supabase.from('tasks').insert(tasks);
+      await client.from('tasks').insert(tasks);
 
       const habits = initialDefaultState.habits.map(h => ({
         id: `h-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`,
@@ -300,11 +304,11 @@ stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: R
         category: h.category,
         days: h.days,
       }));
-      await supabase.from('habits').insert(habits);
+      await client.from('habits').insert(habits);
 
       for (const g of initialDefaultState.goals) {
         const goalId = `g-${userId.substring(0, 5)}-${Math.random().toString(36).substring(2, 7)}`;
-        await supabase.from('goals').insert({
+        await client.from('goals').insert({
           id: goalId,
           user_id: userId,
           title: g.title,
@@ -319,7 +323,7 @@ stateRouter.post('/reset', requireAuth, async (req: AuthenticatedRequest, res: R
             text: st.text,
             completed: st.completed,
           }));
-          await supabase.from('goal_subtasks').insert(subtasks);
+          await client.from('goal_subtasks').insert(subtasks);
         }
       }
     }
