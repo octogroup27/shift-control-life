@@ -215,9 +215,9 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       if (error) {
         let message = 'E-mail ou senha incorretos.';
         if (error.message.includes('Email not confirmed')) {
-          message = 'E-mail ainda não confirmado no Supabase. Desative a opção "Confirm email" no painel do Supabase (Authentication > Providers > Email) para permitir login imediato.';
+          message = 'E-mail ainda não confirmado. Verifique seu e-mail ou use a opção "Esqueceu sua senha?" para desbloquear o acesso.';
         } else if (error.message.includes('Invalid login credentials')) {
-          message = 'E-mail ou senha incorretos. Verifique seus dados ou crie uma conta.';
+          message = 'E-mail ou senha incorretos. Caso tenha esquecido sua senha, utilize a opção "Esqueceu sua senha?" abaixo para redefini-la.';
         } else {
           message = error.message;
         }
@@ -330,4 +330,126 @@ authRouter.post('/logout', async (req: Request, res: Response): Promise<void> =>
     res.json({ success: true });
   }
 });
+
+// POST /api/auth/forgot-password - Solicitar e-mail de redefinição de senha
+authRouter.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'O e-mail é obrigatório.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (isSupabaseConfigured() && supabase) {
+      const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'https://shift---control-life.vercel.app';
+      const redirectTo = `${origin}/#recovery`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo,
+      });
+
+      if (error) {
+        if (error.message.includes('rate limit') || error.status === 429) {
+          res.status(429).json({
+            error: 'Limite de envio de e-mails do Supabase atingido. Por favor, aguarde alguns minutos antes de tentar novamente.',
+          });
+          return;
+        }
+        res.status(400).json({ error: error.message });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'Se o e-mail estiver cadastrado, enviamos um link para redefinir sua senha. Verifique sua caixa de entrada e spam.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Modo local ativo: solicitação de recuperação registrada.',
+    });
+  } catch (err: any) {
+    console.error('Erro em forgot-password:', err);
+    res.status(500).json({ error: 'Erro interno ao processar solicitação de recuperação.' });
+  }
+});
+
+// POST /api/auth/reset-password - Redefinir senha com o token de recuperação
+authRouter.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { password, token } = req.body;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const jwtToken = token || (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '') : null);
+
+    if (!password) {
+      res.status(400).json({ error: 'A nova senha é obrigatória.' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: 'A nova senha deve conter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    if (!jwtToken) {
+      res.status(400).json({ error: 'Token de autorização ou recuperação ausente. Abra o link enviado para seu e-mail.' });
+      return;
+    }
+
+    if (isSupabaseConfigured() && supabase) {
+      const SUPABASE_URL = process.env.SUPABASE_URL || '';
+      const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${jwtToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      const responseData: any = await response.json();
+
+      if (!response.ok) {
+        let errorMsg = responseData?.msg || responseData?.error_description || responseData?.message || 'Falha ao redefinir senha.';
+        if (errorMsg.includes('JWT') || errorMsg.includes('expired') || errorMsg.includes('invalid')) {
+          errorMsg = 'O link de recuperação expirou ou é inválido. Solicite um novo link.';
+        }
+        res.status(400).json({ error: errorMsg });
+        return;
+      }
+
+      if (supabaseAdmin && responseData?.id) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(responseData.id, {
+            email_confirm: true,
+          });
+        } catch (adminErr) {
+          console.warn('Aviso ao auto-confirmar email pós-reset:', adminErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Senha atualizada com sucesso! Você já pode realizar o login com sua nova senha.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Senha redefinida com sucesso no modo local.',
+    });
+  } catch (err: any) {
+    console.error('Erro em reset-password:', err);
+    res.status(500).json({ error: 'Erro interno ao redefinir senha.' });
+  }
+});
+
 
