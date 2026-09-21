@@ -1214,6 +1214,29 @@
           </button>
         </div>
 
+        <!-- Opção de Colar Link / Código de Recuperação -->
+        <div id="auth-token-paste-wrap" class="hidden mt-3 pt-3 border-t border-slate-100">
+          <p class="text-[11px] text-slate-500 font-medium mb-1.5 flex items-center gap-1">
+            <i data-lucide="key" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>Já possui o link ou código do e-mail?</span>
+          </p>
+          <div class="flex gap-1.5">
+            <input 
+              type="text" 
+              id="auth-input-paste-token" 
+              placeholder="Cole o link ou código aqui" 
+              class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
+            />
+            <button 
+              type="button" 
+              onclick="handlePasteRecoveryToken()" 
+              class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold cursor-pointer shrink-0 transition-all shadow-2xs"
+            >
+              Validar
+            </button>
+          </div>
+        </div>
+
       </form>
 
       <!-- Rodapé do Modal -->
@@ -1566,7 +1589,61 @@
         if (submitText) submitText.innerText = 'Entrar na Minha Conta';
         if (subtitle) subtitle.innerText = 'Acesse sua conta para ver seus dados exclusivos';
       }
+
+      const pasteWrap = document.getElementById('auth-token-paste-wrap');
+      if (pasteWrap) {
+        if (mode === 'forgot') pasteWrap.classList.remove('hidden');
+        else pasteWrap.classList.add('hidden');
+      }
+
       if (window.lucide) lucide.createIcons();
+    }
+
+    async function handlePasteRecoveryToken() {
+      const input = document.getElementById('auth-input-paste-token');
+      const val = input ? input.value.trim() : '';
+      if (!val) {
+        setAuthAlert('Por favor, cole o link ou código recebido por e-mail.');
+        return;
+      }
+
+      setAuthAlert(null);
+
+      // Caso 1: O usuário colou uma URL completa contendo access_token (ex: aberta no localhost ou direto do email)
+      if (val.includes('access_token=')) {
+        try {
+          const hashOrQuery = val.split('#')[1] || val.split('?')[1] || val;
+          const params = new URLSearchParams(hashOrQuery);
+          const token = params.get('access_token');
+          if (token) {
+            recoveryToken = token;
+            showAuthModal('reset');
+            setAuthAlert('Link validado com sucesso! Digite sua nova senha abaixo.', 'success');
+            return;
+          }
+        } catch (e) {
+          console.warn('Erro ao processar URL colada:', e);
+        }
+      }
+
+      // Caso 2: O usuário colou um código ou token OTP
+      const email = document.getElementById('auth-input-email')?.value?.trim();
+      try {
+        const res = await fetch('/api/auth/verify-recovery-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code: val })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Código ou link inválido.');
+        if (data.token) {
+          recoveryToken = data.token;
+          showAuthModal('reset');
+          setAuthAlert('Código validado com sucesso! Digite sua nova senha abaixo.', 'success');
+        }
+      } catch (err) {
+        setAuthAlert(err.message || 'Código ou link inválido. Verifique o valor colado.');
+      }
     }
 
     function setAuthAlert(msg, type = 'error') {

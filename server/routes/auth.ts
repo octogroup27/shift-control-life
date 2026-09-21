@@ -364,8 +364,11 @@ authRouter.post('/forgot-password', async (req: Request, res: Response): Promise
     const cleanEmail = email.trim().toLowerCase();
 
     if (isSupabaseConfigured() && supabase) {
-      const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'https://shift---control-life.vercel.app';
-      const redirectTo = `${origin}/#recovery`;
+      // Obtém a URL de origem sem fragmentos ou query strings (ex: https://shift---control-life.vercel.app)
+      // Conforme RFC 6749, redirect_to NÃO pode conter fragmento (#) senão o Supabase rejeita e cai para o SiteURL padrão (localhost)
+      const rawOrigin = (req.headers.origin as string) || (req.headers.referer as string) || 'https://shift---control-life.vercel.app';
+      const cleanOrigin = rawOrigin.split('#')[0].split('?')[0].replace(/\/+$/, '');
+      const redirectTo = `${cleanOrigin}/`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo,
@@ -396,6 +399,55 @@ authRouter.post('/forgot-password', async (req: Request, res: Response): Promise
   } catch (err: any) {
     console.error('Erro em forgot-password:', err);
     res.status(500).json({ error: 'Erro interno ao processar solicitação de recuperação.' });
+  }
+});
+
+// POST /api/auth/verify-recovery-code - Valida código OTP de recuperação
+authRouter.post('/verify-recovery-code', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      res.status(400).json({ error: 'E-mail e código/token são obrigatórios.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = code.trim();
+
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanCode,
+        type: 'recovery',
+      });
+
+      if (error) {
+        res.status(400).json({ error: 'Código ou link inválido/expirado. Verifique os dados digitados ou solicite um novo link.' });
+        return;
+      }
+
+      const token = data.session?.access_token;
+      if (!token) {
+        res.status(400).json({ error: 'Não foi possível validar a sessão de recuperação. Solicite um novo link.' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        token,
+        message: 'Código validado com sucesso! Crie sua nova senha.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      token: 'local-recovery-token',
+      message: 'Código validado com sucesso.',
+    });
+  } catch (err: any) {
+    console.error('Erro em verify-recovery-code:', err);
+    res.status(500).json({ error: 'Erro interno ao verificar código.' });
   }
 });
 
