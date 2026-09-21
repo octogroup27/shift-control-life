@@ -1178,7 +1178,25 @@
           />
         </div>
 
-        <!-- Campo Confirmar Nova Senha (visível no reset) -->
+        <!-- Campo Código de Verificação (visível no modo 'verify-code') -->
+        <div id="auth-field-code" class="hidden">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            Código de Verificação (6 Dígitos)
+          </label>
+          <input 
+            type="text" 
+            id="auth-input-code" 
+            placeholder="Ex: 123456" 
+            maxlength="6"
+            autocomplete="one-time-code"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-center text-base font-bold tracking-widest text-slate-800 placeholder-slate-300 focus:outline-none focus:border-purple-600 focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[10px] text-slate-400 mt-1 text-center">
+            Digite o código de 6 dígitos que chegou no seu e-mail
+          </p>
+        </div>
+
+        <!-- Campo Confirmar Nova Senha (visível no reset e verify-code) -->
         <div id="auth-field-confirm-password" class="hidden">
           <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
             Confirmar Nova Senha
@@ -1202,7 +1220,18 @@
           <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </button>
 
-        <!-- Botão Voltar ao Login (visível em forgot ou reset) -->
+        <!-- Link para Reenviar Código (visível em verify-code) -->
+        <div id="auth-resend-code-wrap" class="hidden text-center pt-1">
+          <button 
+            type="button" 
+            onclick="handleResendCode()" 
+            class="text-[11px] text-slate-500 hover:text-purple-700 transition-colors cursor-pointer"
+          >
+            Não recebeu o código? <span class="font-bold underline">Reenviar e-mail</span>
+          </button>
+        </div>
+
+        <!-- Botão Voltar ao Login (visível em forgot, verify-code ou reset) -->
         <div id="auth-back-to-login-wrap" class="hidden text-center pt-1.5">
           <button 
             type="button" 
@@ -1514,13 +1543,16 @@
       const tabSignup = document.getElementById('tab-auth-signup');
       const fieldName = document.getElementById('auth-field-name');
       const fieldEmail = document.getElementById('auth-field-email');
+      const fieldCode = document.getElementById('auth-field-code');
       const fieldPassword = document.getElementById('auth-field-password');
       const fieldConfirmPassword = document.getElementById('auth-field-confirm-password');
       const labelPassword = document.getElementById('auth-label-password');
       const inputEmail = document.getElementById('auth-input-email');
+      const inputCode = document.getElementById('auth-input-code');
       const inputPassword = document.getElementById('auth-input-password');
       const inputConfirmPassword = document.getElementById('auth-input-confirm-password');
       const forgotWrap = document.getElementById('auth-forgot-link-wrap');
+      const resendWrap = document.getElementById('auth-resend-code-wrap');
       const backWrap = document.getElementById('auth-back-to-login-wrap');
       const submitText = document.getElementById('auth-submit-btn-text');
       const subtitle = document.getElementById('auth-subtitle');
@@ -1535,12 +1567,15 @@
         if (fieldName) fieldName.classList.remove('hidden');
         if (fieldEmail) fieldEmail.classList.remove('hidden');
         if (inputEmail) inputEmail.required = true;
+        if (fieldCode) fieldCode.classList.add('hidden');
+        if (inputCode) inputCode.required = false;
         if (fieldPassword) fieldPassword.classList.remove('hidden');
         if (labelPassword) labelPassword.innerText = 'Senha';
         if (inputPassword) { inputPassword.required = true; inputPassword.placeholder = 'Mínimo 6 caracteres'; }
         if (fieldConfirmPassword) fieldConfirmPassword.classList.add('hidden');
         if (inputConfirmPassword) inputConfirmPassword.required = false;
         if (forgotWrap) forgotWrap.classList.add('hidden');
+        if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.add('hidden');
         if (submitText) submitText.innerText = 'Criar Minha Conta';
         if (subtitle) subtitle.innerText = 'Cadastre-se para ter seu espaço exclusivo e isolado';
@@ -1549,25 +1584,48 @@
         if (fieldName) fieldName.classList.add('hidden');
         if (fieldEmail) fieldEmail.classList.remove('hidden');
         if (inputEmail) inputEmail.required = true;
+        if (fieldCode) fieldCode.classList.add('hidden');
+        if (inputCode) inputCode.required = false;
         if (fieldPassword) fieldPassword.classList.add('hidden');
         if (inputPassword) inputPassword.required = false;
         if (fieldConfirmPassword) fieldConfirmPassword.classList.add('hidden');
         if (inputConfirmPassword) inputConfirmPassword.required = false;
         if (forgotWrap) forgotWrap.classList.add('hidden');
+        if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.remove('hidden');
-        if (submitText) submitText.innerText = 'Enviar Link de Recuperação';
-        if (subtitle) subtitle.innerText = 'Informe seu e-mail para receber o link de redefinição de senha';
-      } else if (mode === 'reset') {
+        if (submitText) submitText.innerText = 'Enviar Código de Recuperação';
+        if (subtitle) subtitle.innerText = 'Informe seu e-mail para enviarmos o código de recuperação';
+      } else if (mode === 'verify-code') {
         if (tabContainer) tabContainer.classList.add('hidden');
         if (fieldName) fieldName.classList.add('hidden');
-        if (fieldEmail) fieldEmail.classList.add('hidden');
-        if (inputEmail) inputEmail.required = false;
+        if (fieldEmail) fieldEmail.classList.remove('hidden');
+        if (inputEmail) inputEmail.required = true;
+        if (fieldCode) fieldCode.classList.remove('hidden');
+        if (inputCode) { inputCode.required = true; inputCode.value = ''; }
         if (fieldPassword) fieldPassword.classList.remove('hidden');
         if (labelPassword) labelPassword.innerText = 'Nova Senha';
         if (inputPassword) { inputPassword.required = true; inputPassword.value = ''; inputPassword.placeholder = 'Mínimo 6 caracteres'; }
         if (fieldConfirmPassword) fieldConfirmPassword.classList.remove('hidden');
         if (inputConfirmPassword) { inputConfirmPassword.required = true; inputConfirmPassword.value = ''; }
         if (forgotWrap) forgotWrap.classList.add('hidden');
+        if (resendWrap) resendWrap.classList.remove('hidden');
+        if (backWrap) backWrap.classList.remove('hidden');
+        if (submitText) submitText.innerText = 'Confirmar e Redefinir Senha';
+        if (subtitle) subtitle.innerText = 'Digite o código de 6 dígitos e defina sua nova senha';
+      } else if (mode === 'reset') {
+        if (tabContainer) tabContainer.classList.add('hidden');
+        if (fieldName) fieldName.classList.add('hidden');
+        if (fieldEmail) fieldEmail.classList.add('hidden');
+        if (inputEmail) inputEmail.required = false;
+        if (fieldCode) fieldCode.classList.add('hidden');
+        if (inputCode) inputCode.required = false;
+        if (fieldPassword) fieldPassword.classList.remove('hidden');
+        if (labelPassword) labelPassword.innerText = 'Nova Senha';
+        if (inputPassword) { inputPassword.required = true; inputPassword.value = ''; inputPassword.placeholder = 'Mínimo 6 caracteres'; }
+        if (fieldConfirmPassword) fieldConfirmPassword.classList.remove('hidden');
+        if (inputConfirmPassword) { inputConfirmPassword.required = true; inputConfirmPassword.value = ''; }
+        if (forgotWrap) forgotWrap.classList.add('hidden');
+        if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.remove('hidden');
         if (submitText) submitText.innerText = 'Salvar Nova Senha';
         if (subtitle) subtitle.innerText = 'Defina sua nova senha de acesso à conta';
@@ -1579,12 +1637,15 @@
         if (fieldName) fieldName.classList.add('hidden');
         if (fieldEmail) fieldEmail.classList.remove('hidden');
         if (inputEmail) inputEmail.required = true;
+        if (fieldCode) fieldCode.classList.add('hidden');
+        if (inputCode) inputCode.required = false;
         if (fieldPassword) fieldPassword.classList.remove('hidden');
         if (labelPassword) labelPassword.innerText = 'Senha';
         if (inputPassword) { inputPassword.required = true; inputPassword.placeholder = 'Mínimo 6 caracteres'; }
         if (fieldConfirmPassword) fieldConfirmPassword.classList.add('hidden');
         if (inputConfirmPassword) inputConfirmPassword.required = false;
         if (forgotWrap) forgotWrap.classList.remove('hidden');
+        if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.add('hidden');
         if (submitText) submitText.innerText = 'Entrar na Minha Conta';
         if (subtitle) subtitle.innerText = 'Acesse sua conta para ver seus dados exclusivos';
@@ -1643,6 +1704,29 @@
         }
       } catch (err) {
         setAuthAlert(err.message || 'Código ou link inválido. Verifique o valor colado.');
+      }
+    }
+
+    async function handleResendCode() {
+      const email = document.getElementById('auth-input-email')?.value?.trim();
+      if (!email) {
+        setAuthAlert('Por favor, informe seu e-mail para reenviar o código.');
+        return;
+      }
+
+      setAuthAlert('Reenviando código de verificação...', 'success');
+
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha ao reenviar código.');
+        setAuthAlert(`Novo código enviado para ${email}! Verifique seu e-mail e spam.`, 'success');
+      } catch (err) {
+        setAuthAlert(err.message || 'Falha ao reenviar código.');
       }
     }
 
@@ -1796,7 +1880,7 @@
       if (btn) btn.disabled = true;
 
       try {
-        // Fluxo de recuperação de senha (esqueci minha senha)
+        // Fluxo 1: Solicitação de envio do código de recuperação
         if (currentAuthMode === 'forgot') {
           if (!email) throw new Error('Por favor, digite seu e-mail.');
           const res = await fetch('/api/auth/forgot-password', {
@@ -1805,8 +1889,33 @@
             body: JSON.stringify({ email })
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Falha ao solicitar redefinição.');
-          setAuthAlert(data.message || 'Se o e-mail estiver cadastrado, o link foi enviado. Verifique seu e-mail e spam.', 'success');
+          if (!res.ok) throw new Error(data.error || 'Falha ao solicitar código.');
+          switchAuthMode('verify-code');
+          setAuthAlert(`Código enviado para ${email}! Verifique seu e-mail e digite o código de 6 dígitos abaixo.`, 'success');
+          return;
+        }
+
+        // Fluxo 2: Validação do código de 6 dígitos e definição da nova senha
+        if (currentAuthMode === 'verify-code') {
+          const code = document.getElementById('auth-input-code')?.value?.trim();
+          if (!email) throw new Error('Por favor, informe seu e-mail.');
+          if (!code) throw new Error('Por favor, digite o código de verificação recebido por e-mail.');
+          if (!password) throw new Error('Por favor, digite a sua nova senha.');
+          if (password.length < 6) throw new Error('A nova senha deve conter no mínimo 6 caracteres.');
+          if (password !== confirmPassword) throw new Error('As senhas não coincidem. Certifique-se de digitar a mesma senha.');
+
+          const res = await fetch('/api/auth/reset-with-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code, newPassword: password })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Falha ao redefinir a senha.');
+
+          setAuthAlert('Senha redefinida com sucesso! Redirecionando para o login...', 'success');
+          setTimeout(() => {
+            switchAuthMode('login');
+          }, 2000);
           return;
         }
 

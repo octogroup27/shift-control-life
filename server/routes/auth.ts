@@ -451,6 +451,114 @@ authRouter.post('/verify-recovery-code', async (req: Request, res: Response): Pr
   }
 });
 
+// POST /api/auth/reset-with-code - Valida o código OTP e redefine a senha em uma única etapa
+authRouter.post('/reset-with-code', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      res.status(400).json({ error: 'E-mail, código de verificação e nova senha são obrigatórios.' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: 'A nova senha deve conter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = code.trim();
+
+    if (isSupabaseConfigured() && supabase) {
+      const SUPABASE_URL = process.env.SUPABASE_URL || '';
+      const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+
+      // 1. Valida o código OTP de recuperação
+      let verifyResult = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanCode,
+        type: 'recovery',
+      });
+
+      // Se falhar e o código for longo (como um token hash), tenta como token_hash
+      if (verifyResult.error && cleanCode.length > 10) {
+        verifyResult = await supabase.auth.verifyOtp({
+          token_hash: cleanCode,
+          type: 'recovery',
+        });
+      }
+
+      if (verifyResult.error || !verifyResult.data?.session?.access_token) {
+        const errMsg = verifyResult.error?.message || '';
+        let userMsg = 'Código de verificação inválido ou expirado. Verifique os 6 dígitos recebidos no e-mail ou solicite um novo envio.';
+        if (errMsg.includes('expired')) {
+          userMsg = 'O código de verificação expirou. Por favor, solicite um novo código.';
+        }
+        res.status(400).json({ error: userMsg });
+        return;
+      }
+
+      const session = verifyResult.data.session;
+      const user = verifyResult.data.user;
+
+      // 2. Atualiza a senha no Supabase Auth usando o access token gerado pela validação
+      const updateResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: newPassword }),
+      });
+
+      if (!updateResponse.ok) {
+        const updateData: any = await updateResponse.json();
+        res.status(400).json({ error: updateData?.msg || updateData?.message || 'Falha ao atualizar a senha.' });
+        return;
+      }
+
+      // 3. Se houver supabaseAdmin, garante email_confirm: true
+      if (supabaseAdmin && user?.id) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(user.id, {
+            email_confirm: true,
+          });
+        } catch (adminErr) {
+          console.warn('Aviso ao auto-confirmar email pós-reset:', adminErr);
+        }
+      }
+
+      // 4. Criptografa com bcrypt e armazena na tabela profiles
+      if (user?.id) {
+        try {
+          const hashedPassword = await bcrypt.hash(newPassword, 10);
+          const scopedClient = getScopedSupabase(session.access_token) || supabase;
+          if (scopedClient) {
+            await scopedClient.from('profiles').update({ password_hash: hashedPassword }).eq('id', user.id);
+          }
+        } catch (passErr) {
+          console.warn('Aviso ao atualizar password_hash no profile pós-reset:', passErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Senha redefinida com sucesso! Você já pode realizar o login com sua nova senha.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Senha redefinida com sucesso no modo local.',
+    });
+  } catch (err: any) {
+    console.error('Erro em reset-with-code:', err);
+    res.status(500).json({ error: 'Erro interno ao redefinir senha com código.' });
+  }
+});
+
 // POST /api/auth/reset-password - Redefinir senha com o token de recuperação
 authRouter.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
   try {
