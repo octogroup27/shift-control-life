@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
+import bcrypt from 'bcryptjs';
 import { supabase, supabaseAdmin, getScopedSupabase, isSupabaseConfigured, initialDefaultState } from '../supabase.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -155,15 +156,27 @@ authRouter.post('/signup', async (req: Request, res: Response): Promise<void> =>
       }
 
       if (createdUser) {
+        // Criptografa a senha com bcrypt (salt 10) para armazenamento seguro no banco
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         // Obtém cliente com credencial autenticada do usuário ou admin para contornar bloqueio de RLS
         const scopedClient = getScopedSupabase(userSession?.access_token) || supabase;
 
-        // Salva perfil no Supabase
-        await scopedClient.from('profiles').upsert({
-          id: createdUser.id,
-          user_name: userName,
-          email: createdUser.email,
-        });
+        if (scopedClient) {
+          const profilePayload: any = {
+            id: createdUser.id,
+            user_name: userName,
+            email: createdUser.email,
+            password_hash: hashedPassword,
+          };
+
+          const { error: profileErr } = await scopedClient.from('profiles').upsert(profilePayload);
+          if (profileErr && (profileErr.message.includes('password_hash') || (profileErr as any).code === '42703')) {
+            // Se a coluna ainda não existir no banco, salva sem ela para evitar erros
+            delete profilePayload.password_hash;
+            await scopedClient.from('profiles').upsert(profilePayload);
+          }
+        }
       }
 
       res.status(201).json({
@@ -240,17 +253,25 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
 
       let userName = profile?.user_name || user.user_metadata?.user_name || user.user_metadata?.full_name || cleanEmail.split('@')[0];
 
-      // Auto-reparo se o perfil ainda não existir na tabela profiles do Supabase
-      if (!profile) {
-        try {
+      // Garante que o perfil do usuário tenha sua senha criptografada com bcrypt armazenada no banco
+      try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const { error: syncErr } = await scopedClient.from('profiles').upsert({
+          id: user.id,
+          user_name: userName,
+          email: user.email,
+          password_hash: hashedPassword,
+        });
+
+        if (syncErr && (syncErr.message.includes('password_hash') || (syncErr as any).code === '42703')) {
           await scopedClient.from('profiles').upsert({
             id: user.id,
             user_name: userName,
             email: user.email,
           });
-        } catch (e) {
-          console.warn('Aviso ao sincronizar perfil pós-login:', e);
         }
+      } catch (e) {
+        console.warn('Aviso ao sincronizar perfil pós-login:', e);
       }
 
       res.json({
@@ -432,6 +453,19 @@ authRouter.post('/reset-password', async (req: Request, res: Response): Promise<
           });
         } catch (adminErr) {
           console.warn('Aviso ao auto-confirmar email pós-reset:', adminErr);
+        }
+      }
+
+      // Atualiza o hash criptografado da nova senha no perfil
+      if (responseData?.id) {
+        try {
+          const hashedPassword = await bcrypt.hash(password, 10);
+          const scopedClient = getScopedSupabase(jwtToken) || supabase;
+          if (scopedClient) {
+            await scopedClient.from('profiles').update({ password_hash: hashedPassword }).eq('id', responseData.id);
+          }
+        } catch (passErr) {
+          console.warn('Aviso ao atualizar password_hash no profile:', passErr);
         }
       }
 

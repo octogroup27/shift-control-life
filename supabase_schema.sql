@@ -18,9 +18,18 @@ CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   user_name TEXT NOT NULL DEFAULT 'Usuário',
   email TEXT,
+  password_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Garante adição da coluna caso a tabela já exista
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'password_hash') IS FALSE THEN
+    ALTER TABLE public.profiles ADD COLUMN password_hash TEXT;
+  END IF;
+END $$;
 
 -- =============================================================================
 -- 2. TABELA: EVENTS (Agenda com vínculo ao usuário)
