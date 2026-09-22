@@ -11,7 +11,7 @@ export interface EventItem {
   day: number; // 0..6 (Segunda a Domingo)
   startHour: number;
   startMinute: number;
-  duration: number;
+  duration: number | string;
   color: string;
   category: string;
   createdAt?: string;

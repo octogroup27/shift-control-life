@@ -2147,6 +2147,25 @@
         if (res.ok) {
           const remoteState = await res.json();
           if (remoteState && remoteState.userName) {
+            // Se o servidor retornar arrays vazios mas o usuário possuir dados locais salvos,
+            // preservamos os dados locais e sincronizamos com o servidor para não perdê-los
+            if ((!remoteState.events || remoteState.events.length === 0) && appState.events && appState.events.length > 0) {
+              remoteState.events = appState.events;
+              syncStateToBackend();
+            }
+            if ((!remoteState.tasks || remoteState.tasks.length === 0) && appState.tasks && appState.tasks.length > 0) {
+              remoteState.tasks = appState.tasks;
+              syncStateToBackend();
+            }
+            if ((!remoteState.habits || remoteState.habits.length === 0) && appState.habits && appState.habits.length > 0) {
+              remoteState.habits = appState.habits;
+              syncStateToBackend();
+            }
+            if ((!remoteState.goals || remoteState.goals.length === 0) && appState.goals && appState.goals.length > 0) {
+              remoteState.goals = appState.goals;
+              syncStateToBackend();
+            }
+
             appState = remoteState;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
             renderAll();
@@ -3026,7 +3045,7 @@
         }
       } else {
         appState.events.push({
-          id: 'ev-' + Date.now(),
+          id: 'ev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
           title,
           day,
           startHour,

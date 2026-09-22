@@ -103,7 +103,7 @@ stateRouter.get('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
         day: Number(row.day),
         startHour: Number(row.start_hour),
         startMinute: Number(row.start_minute ?? 0),
-        duration: Number(row.duration),
+        duration: (row.duration === 24 || row.duration === '24' || row.duration === 'all_day') ? 'all_day' : Number(row.duration),
         color: row.color,
         category: row.category,
       }));
@@ -180,48 +180,81 @@ stateRouter.put('/state', requireAuth, async (req: AuthenticatedRequest, res: Re
       }
 
       if (Array.isArray(events)) {
-        await client.from('events').delete().eq('user_id', userId);
+        const currentIds = events.map(e => String(e.id)).filter(Boolean);
+        const { data: existingRows } = await client.from('events').select('id').eq('user_id', userId);
+        const existingIds: string[] = (existingRows || []).map((r: any) => r.id);
+        const idsToDelete = existingIds.filter(id => !currentIds.includes(id));
+        if (idsToDelete.length > 0) {
+          await client.from('events').delete().eq('user_id', userId).in('id', idsToDelete);
+        }
+
         if (events.length > 0) {
           const rows = events.map(e => ({
-            id: e.id,
+            id: String(e.id),
             user_id: userId,
-            title: e.title,
-            day: e.day,
-            start_hour: e.startHour,
-            start_minute: e.startMinute ?? 0,
-            duration: e.duration,
-            color: e.color,
-            category: e.category,
+            title: String(e.title || 'Sem título'),
+            day: Math.max(0, Math.min(6, parseInt(e.day, 10) || 0)),
+            start_hour: Math.max(0, Math.min(23, parseInt(e.startHour, 10) || 7)),
+            start_minute: Math.max(0, Math.min(59, parseInt(e.startMinute, 10) || 0)),
+            duration: (e.duration === 'all_day' || e.duration === 24 || e.duration === '24') ? 24 : (parseFloat(e.duration) || 1.0),
+            color: e.color || 'blue',
+            category: e.category || 'Trabalho',
           }));
-          await client.from('events').insert(rows);
+          const { error: eventErr } = await client.from('events').upsert(rows);
+          if (eventErr) {
+            console.error('Erro ao salvar eventos no Supabase:', eventErr);
+            throw new Error('Falha ao salvar eventos da agenda: ' + eventErr.message);
+          }
         }
       }
 
       if (Array.isArray(tasks)) {
-        await client.from('tasks').delete().eq('user_id', userId);
+        const currentIds = tasks.map(t => String(t.id)).filter(Boolean);
+        const { data: existingTasks } = await client.from('tasks').select('id').eq('user_id', userId);
+        const existingTaskIds: string[] = (existingTasks || []).map((r: any) => r.id);
+        const taskIdsToDelete = existingTaskIds.filter(id => !currentIds.includes(id));
+        if (taskIdsToDelete.length > 0) {
+          await client.from('tasks').delete().eq('user_id', userId).in('id', taskIdsToDelete);
+        }
+
         if (tasks.length > 0) {
           const rows = tasks.map(t => ({
-            id: t.id,
+            id: String(t.id),
             user_id: userId,
-            text: t.text,
-            completed: t.completed,
-            category: t.category,
+            text: String(t.text || ''),
+            completed: Boolean(t.completed),
+            category: t.category || 'Geral',
           }));
-          await client.from('tasks').insert(rows);
+          const { error: taskErr } = await client.from('tasks').upsert(rows);
+          if (taskErr) {
+            console.error('Erro ao salvar tarefas no Supabase:', taskErr);
+            throw new Error('Falha ao salvar tarefas: ' + taskErr.message);
+          }
         }
       }
 
       if (Array.isArray(habits)) {
-        await client.from('habits').delete().eq('user_id', userId);
+        const currentIds = habits.map(h => String(h.id)).filter(Boolean);
+        const { data: existingHabits } = await client.from('habits').select('id').eq('user_id', userId);
+        const existingHabitIds: string[] = (existingHabits || []).map((r: any) => r.id);
+        const habitIdsToDelete = existingHabitIds.filter(id => !currentIds.includes(id));
+        if (habitIdsToDelete.length > 0) {
+          await client.from('habits').delete().eq('user_id', userId).in('id', habitIdsToDelete);
+        }
+
         if (habits.length > 0) {
           const rows = habits.map(h => ({
-            id: h.id,
+            id: String(h.id),
             user_id: userId,
-            name: h.name,
-            category: h.category,
-            days: h.days,
+            name: String(h.name || ''),
+            category: h.category || 'Geral',
+            days: Array.isArray(h.days) ? h.days : [false, false, false, false, false, false, false],
           }));
-          await client.from('habits').insert(rows);
+          const { error: habitErr } = await client.from('habits').upsert(rows);
+          if (habitErr) {
+            console.error('Erro ao salvar hábitos no Supabase:', habitErr);
+            throw new Error('Falha ao salvar hábitos: ' + habitErr.message);
+          }
         }
       }
 
