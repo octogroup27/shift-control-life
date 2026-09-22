@@ -415,27 +415,35 @@ authRouter.post('/verify-recovery-code', async (req: Request, res: Response): Pr
     const cleanCode = code.trim();
 
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase.auth.verifyOtp({
+      let verifyResult = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanCode,
         type: 'recovery',
       });
 
-      if (error) {
-        res.status(400).json({ error: 'Código ou link inválido/expirado. Verifique os dados digitados ou solicite um novo link.' });
+      if (verifyResult.error && cleanCode.length > 10) {
+        verifyResult = await supabase.auth.verifyOtp({
+          token_hash: cleanCode,
+          type: 'recovery',
+        });
+      }
+
+      if (verifyResult.error || !verifyResult.data?.session?.access_token) {
+        const errMsg = verifyResult.error?.message || '';
+        let userMsg = 'Código inválido ou expirado. Verifique os dígitos recebidos no e-mail ou solicite um novo código.';
+        if (errMsg.toLowerCase().includes('expired')) {
+          userMsg = 'O código de verificação expirou. Por favor, solicite um novo código.';
+        }
+        res.status(400).json({ error: userMsg });
         return;
       }
 
-      const token = data.session?.access_token;
-      if (!token) {
-        res.status(400).json({ error: 'Não foi possível validar a sessão de recuperação. Solicite um novo link.' });
-        return;
-      }
+      const token = verifyResult.data.session.access_token;
 
       res.json({
         success: true,
         token,
-        message: 'Código validado com sucesso! Crie sua nova senha.',
+        message: 'Código validado com sucesso! Agora defina sua nova senha.',
       });
       return;
     }
@@ -490,7 +498,7 @@ authRouter.post('/reset-with-code', async (req: Request, res: Response): Promise
 
       if (verifyResult.error || !verifyResult.data?.session?.access_token) {
         const errMsg = verifyResult.error?.message || '';
-        let userMsg = 'Código de verificação inválido ou expirado. Verifique os 6 dígitos recebidos no e-mail ou solicite um novo envio.';
+        let userMsg = 'Código de verificação inválido ou expirado. Verifique os dígitos recebidos no e-mail ou solicite um novo envio.';
         if (errMsg.includes('expired')) {
           userMsg = 'O código de verificação expirou. Por favor, solicite um novo código.';
         }
