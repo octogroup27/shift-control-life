@@ -1278,29 +1278,6 @@
           </button>
         </div>
 
-        <!-- Opção de Colar Link / Código de Recuperação -->
-        <div id="auth-token-paste-wrap" class="hidden mt-3 pt-3 border-t border-slate-100">
-          <p class="text-[11px] text-slate-500 font-medium mb-1.5 flex items-center gap-1">
-            <i data-lucide="key" class="w-3.5 h-3.5 text-indigo-500"></i>
-            <span>Já possui o link ou código do e-mail?</span>
-          </p>
-          <div class="flex gap-1.5">
-            <input 
-              type="text" 
-              id="auth-input-paste-token" 
-              placeholder="Cole o link ou código aqui" 
-              class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
-            />
-            <button 
-              type="button" 
-              onclick="handlePasteRecoveryToken()" 
-              class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold cursor-pointer shrink-0 transition-all shadow-2xs"
-            >
-              Validar
-            </button>
-          </div>
-        </div>
-
       </form>
 
     </div>
@@ -1610,6 +1587,14 @@
       }
     }
 
+    function getAuthSubmitButtonText(mode) {
+      if (mode === 'signup') return 'Criar Minha Conta';
+      if (mode === 'forgot') return 'Enviar Código de Recuperação';
+      if (mode === 'verify-code') return 'Validar Código';
+      if (mode === 'reset') return 'Salvar Nova Senha';
+      return 'Entrar na Minha Conta';
+    }
+
     function switchAuthMode(mode) {
       currentAuthMode = mode;
       const tabContainer = document.getElementById('tab-auth-container');
@@ -1633,7 +1618,6 @@
       const submitText = document.getElementById('auth-submit-btn-text');
       const subtitle = document.getElementById('auth-subtitle');
       const alertEl = document.getElementById('auth-alert');
-      const pasteWrap = document.getElementById('auth-token-paste-wrap');
 
       if (alertEl) alertEl.classList.add('hidden');
 
@@ -1655,8 +1639,7 @@
         if (forgotWrap) forgotWrap.classList.add('hidden');
         if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.add('hidden');
-        if (pasteWrap) pasteWrap.classList.add('hidden');
-        if (submitText) submitText.innerText = 'Criar Minha Conta';
+        if (submitText) submitText.innerText = getAuthSubmitButtonText('signup');
         if (subtitle) subtitle.innerText = 'Cadastre-se para ter seu espaço exclusivo e isolado';
       } else if (mode === 'forgot') {
         // Etapa 1: Envio do código
@@ -1676,8 +1659,7 @@
         if (backWrap) backWrap.classList.remove('hidden');
         if (backBtn) backBtn.onclick = () => switchAuthMode('login');
         if (backText) backText.innerText = 'Voltar para o login';
-        if (pasteWrap) pasteWrap.classList.remove('hidden');
-        if (submitText) submitText.innerText = 'Enviar Código de Recuperação';
+        if (submitText) submitText.innerText = getAuthSubmitButtonText('forgot');
         if (subtitle) subtitle.innerText = 'Etapa 1 de 3: Digite seu e-mail para receber o código';
       } else if (mode === 'verify-code') {
         // Etapa 2: Validação do código
@@ -1697,8 +1679,7 @@
         if (backWrap) backWrap.classList.remove('hidden');
         if (backBtn) backBtn.onclick = () => switchAuthMode('forgot');
         if (backText) backText.innerText = 'Voltar para alterar o e-mail';
-        if (pasteWrap) pasteWrap.classList.add('hidden');
-        if (submitText) submitText.innerText = 'Validar Código';
+        if (submitText) submitText.innerText = getAuthSubmitButtonText('verify-code');
         if (subtitle) {
           subtitle.innerText = recoveryEmail 
             ? `Etapa 2 de 3: Digite o código enviado para ${recoveryEmail}` 
@@ -1723,8 +1704,7 @@
         if (backWrap) backWrap.classList.remove('hidden');
         if (backBtn) backBtn.onclick = () => switchAuthMode('login');
         if (backText) backText.innerText = 'Cancelar e voltar ao login';
-        if (pasteWrap) pasteWrap.classList.add('hidden');
-        if (submitText) submitText.innerText = 'Salvar Nova Senha';
+        if (submitText) submitText.innerText = getAuthSubmitButtonText('reset');
         if (subtitle) subtitle.innerText = 'Etapa 3 de 3: Crie e confirme sua nova senha';
       } else {
         // mode === 'login'
@@ -1745,64 +1725,11 @@
         if (forgotWrap) forgotWrap.classList.remove('hidden');
         if (resendWrap) resendWrap.classList.add('hidden');
         if (backWrap) backWrap.classList.add('hidden');
-        if (pasteWrap) pasteWrap.classList.add('hidden');
-        if (submitText) submitText.innerText = 'Entrar na Minha Conta';
+        if (submitText) submitText.innerText = getAuthSubmitButtonText('login');
         if (subtitle) subtitle.innerText = 'Acesse sua conta para ver seus dados exclusivos';
       }
 
       if (window.lucide) lucide.createIcons();
-    }
-
-    async function handlePasteRecoveryToken() {
-      const input = document.getElementById('auth-input-paste-token');
-      const val = input ? input.value.trim() : '';
-      if (!val) {
-        setAuthAlert('Por favor, cole o link ou código recebido por e-mail.');
-        return;
-      }
-
-      setAuthAlert(null);
-
-      // Caso 1: O usuário colou uma URL completa contendo access_token
-      if (val.includes('access_token=')) {
-        try {
-          const hashOrQuery = val.split('#')[1] || val.split('?')[1] || val;
-          const params = new URLSearchParams(hashOrQuery);
-          const token = params.get('access_token');
-          if (token) {
-            recoveryToken = token;
-            switchAuthMode('reset');
-            setAuthAlert('Link validado com sucesso! Digite sua nova senha abaixo.', 'success');
-            return;
-          }
-        } catch (e) {
-          console.warn('Erro ao processar URL colada:', e);
-        }
-      }
-
-      // Caso 2: O usuário colou um código ou token OTP
-      const email = recoveryEmail || document.getElementById('auth-input-email')?.value?.trim();
-      if (!email) {
-        setAuthAlert('Por favor, informe seu e-mail no campo acima para validar o código.');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/auth/verify-recovery-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, code: val })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Código ou link inválido.');
-        if (data.token) {
-          recoveryToken = data.token;
-          switchAuthMode('reset');
-          setAuthAlert('Código validado com sucesso! Digite sua nova senha abaixo.', 'success');
-        }
-      } catch (err) {
-        setAuthAlert(err.message || 'Código ou link inválido. Verifique o valor colado.');
-      }
     }
 
     async function handleResendCode() {
@@ -1973,7 +1900,6 @@
 
       setAuthAlert(null);
 
-      const origText = submitText ? submitText.innerText : 'Aguarde...';
       if (submitText) submitText.innerText = 'Processando...';
       if (btn) btn.disabled = true;
 
@@ -2077,7 +2003,7 @@
         setAuthAlert(err.message || 'Ocorreu um erro ao processar sua solicitação.');
       } finally {
         if (btn) btn.disabled = false;
-        if (submitText) submitText.innerText = origText;
+        if (submitText) submitText.innerText = getAuthSubmitButtonText(currentAuthMode);
       }
     }
 
